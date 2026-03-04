@@ -138,7 +138,6 @@ export const NormalizeResponseSchema = z.object({
 })
 
 export const RerunOverridesSchema = z.object({
-  mode: z.enum(["simple", "detailed"]).optional(),
   force_clarify: z.boolean().optional(),
   constraints: z.array(z.string().min(1)).optional(),
   geography_region: z.string().min(1).optional(),

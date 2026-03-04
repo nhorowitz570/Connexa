@@ -17,7 +17,7 @@ export type PipelineStepKey = (typeof PIPELINE_STEP_CONFIG)[number]["key"]
 
 type PipelineStepsProps = {
   completedStepKeys: PipelineStepKey[]
-  status: "running" | "complete" | "failed"
+  status: "running" | "complete" | "failed" | "cancelled"
 }
 
 export function PipelineSteps({ completedStepKeys, status }: PipelineStepsProps) {

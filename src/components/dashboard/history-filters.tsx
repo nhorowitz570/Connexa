@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 type HistoryFiltersProps = {
   mode: "all" | "simple" | "detailed"
-  status: "all" | "draft" | "clarifying" | "running" | "complete" | "failed"
+  status: "all" | "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
   query: string
 }
 
@@ -22,6 +22,7 @@ export function HistoryFilters({ mode, status, query }: HistoryFiltersProps) {
   const pushParams = (updater: (params: URLSearchParams) => void) => {
     const params = new URLSearchParams(searchParams.toString())
     updater(params)
+    params.delete("brief")
     params.set("page", "1")
     router.push(`${pathname}?${params.toString()}`)
   }
@@ -55,7 +56,7 @@ export function HistoryFilters({ mode, status, query }: HistoryFiltersProps) {
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search by service type, prompt, or brief ID"
+          placeholder="Search by name, service type, prompt, or brief ID"
         />
         <Button type="submit" variant="outline">
           Search
@@ -82,6 +83,7 @@ export function HistoryFilters({ mode, status, query }: HistoryFiltersProps) {
           <SelectItem value="complete">Complete</SelectItem>
           <SelectItem value="running">Running</SelectItem>
           <SelectItem value="failed">Failed</SelectItem>
+          <SelectItem value="cancelled">Cancelled</SelectItem>
           <SelectItem value="draft">Draft</SelectItem>
           <SelectItem value="clarifying">Clarifying</SelectItem>
         </SelectContent>

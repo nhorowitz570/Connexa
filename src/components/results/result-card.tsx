@@ -1,9 +1,14 @@
+"use client"
+
+import { useState } from "react"
+
 import { ContactSuggestion } from "@/components/results/contact-suggestion"
 import { ReasoningPanel } from "@/components/results/reasoning-panel"
 import { ScoreBreakdown } from "@/components/results/score-breakdown"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { MapPin } from "lucide-react"
 import type { ScoredResult } from "@/types"
 
 function scoreClass(score: number): string {
@@ -51,6 +56,26 @@ function confidenceDrivers(result: ScoredResult): string[] {
   return drivers
 }
 
+function scoreTextClass(score: number): string {
+  if (score >= 90) return "text-emerald-400"
+  if (score >= 80) return "text-indigo-400"
+  if (score >= 70) return "text-blue-400"
+  return "text-amber-400"
+}
+
+function parsePricingSignal(value: unknown): { type: string; value: string; evidence: string } | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const pricing = value as { type?: unknown; value?: unknown; evidence?: unknown }
+  if (typeof pricing.type !== "string" || typeof pricing.value !== "string" || typeof pricing.evidence !== "string") {
+    return null
+  }
+  return {
+    type: pricing.type,
+    value: pricing.value,
+    evidence: pricing.evidence,
+  }
+}
+
 type ResultCardProps = {
   rank: number
   result: ScoredResult
@@ -60,13 +85,18 @@ type ResultCardProps = {
 export function ResultCard({ rank, result, mode }: ResultCardProps) {
   const tier = confidenceTier(result.confidence)
   const drivers = confidenceDrivers(result)
+  const pricingSignal = parsePricingSignal(result.pricing_signals)
+  const [portfolioExpanded, setPortfolioExpanded] = useState(false)
+  const portfolioSignals = result.portfolio_signals ?? []
+  const visiblePortfolioSignals = portfolioExpanded ? portfolioSignals : portfolioSignals.slice(0, 3)
+  const hiddenPortfolioCount = Math.max(0, portfolioSignals.length - 3)
 
   return (
     <Card>
       <CardHeader className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-lg">
-            #{rank} {result.company_name}
+            <span className={scoreTextClass(result.score_overall)}>#{rank}</span> {result.company_name}
           </CardTitle>
           <Badge className={scoreClass(result.score_overall)}>Score: {result.score_overall}</Badge>
         </div>
@@ -81,16 +111,70 @@ export function ResultCard({ rank, result, mode }: ResultCardProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">
-          {result.services.map((service) => (
-            <Badge key={service} variant="secondary">
+          {result.services.map((service, index) => (
+            <Badge key={`${service}-${index}`} variant="secondary">
               {service}
             </Badge>
           ))}
         </div>
 
-        {result.geography ? <p className="text-sm text-[#919191]">Geography: {result.geography}</p> : null}
+        {result.industries.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {result.industries.map((industry, index) => (
+              <Badge
+                key={`${industry}-${index}`}
+                variant="outline"
+                className="border-indigo-500/30 text-indigo-300"
+              >
+                {industry}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+
+        {result.geography ? (
+          <div className="flex items-center gap-2 text-sm text-[#919191]">
+            <MapPin className="h-4 w-4 text-indigo-400" />
+            <span>{result.geography}</span>
+          </div>
+        ) : null}
+
+        {pricingSignal ? (
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3">
+            <p className="mb-1 text-xs font-medium text-emerald-400">Pricing Signal</p>
+            <p className="text-sm text-white">
+              {pricingSignal.type}: {pricingSignal.value}
+            </p>
+            <p className="mt-1 text-xs text-[#919191]">{pricingSignal.evidence}</p>
+          </div>
+        ) : null}
+
+        {portfolioSignals.length > 0 ? (
+          <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/10 p-3">
+            <p className="mb-1 text-xs font-medium text-indigo-400">Portfolio Evidence</p>
+            <ul className="space-y-1 text-sm text-[#c0c0c0]">
+              {visiblePortfolioSignals.map((signal, index) => (
+                <li key={`${signal}-${index}`}>- {signal}</li>
+              ))}
+            </ul>
+            {hiddenPortfolioCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => setPortfolioExpanded((current) => !current)}
+                className="mt-2 text-xs text-indigo-300 underline underline-offset-4 transition-colors hover:text-indigo-200"
+              >
+                {portfolioExpanded ? "Show less" : `View ${hiddenPortfolioCount} more`}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         <p className="text-sm">{result.reasoning_summary}</p>
+        {result.evidence_links.length > 0 ? (
+          <p className="text-xs text-[#919191]">
+            Based on {result.evidence_links.length} source{result.evidence_links.length > 1 ? "s" : ""}
+          </p>
+        ) : null}
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>

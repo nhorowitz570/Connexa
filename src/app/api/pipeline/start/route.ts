@@ -175,6 +175,22 @@ function coerceNormalizedBrief(raw: unknown): NormalizedBrief | null {
   return reparsed.success ? reparsed.data : null
 }
 
+function dedupeOptions(values: Array<string | null | undefined>, fallback: string[]): string[] {
+  const cleaned = [...new Set(
+    values
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value)),
+  )]
+  if (cleaned.length >= 2) return cleaned
+
+  for (const option of fallback) {
+    if (!cleaned.includes(option)) cleaned.push(option)
+    if (cleaned.length >= 2) break
+  }
+
+  return cleaned
+}
+
 function fallbackClarifications(brief: NormalizedBrief): QuestionsPayload {
   return {
     type: "connexa.clarifications.v1",
@@ -205,7 +221,10 @@ function fallbackClarifications(brief: NormalizedBrief): QuestionsPayload {
         id: "geo_preference",
         prompt: "Preferred provider geography",
         type: "select",
-        options: [brief.geography.region, "United States", "North America", "Europe", "Global"],
+        options: dedupeOptions(
+          [brief.geography.region, "United States", "North America", "Europe", "Global"],
+          ["Any region", "Global"],
+        ),
         allowOther: false,
         required: false,
         fieldPath: "geography.region",
@@ -322,7 +341,7 @@ export async function POST(request: Request) {
 
     const { data: brief, error: briefError } = await supabase
       .from("briefs")
-      .select("id, mode, raw_prompt, normalized_brief")
+      .select("id, status, raw_prompt, normalized_brief")
       .eq("id", body.brief_id)
       .eq("user_id", user.id)
       .single()
@@ -339,16 +358,21 @@ export async function POST(request: Request) {
       )
     }
 
+    if (brief.status !== "draft" && brief.status !== "complete" && brief.status !== "failed" && brief.status !== "cancelled") {
+      return NextResponse.json(
+        { error: "Brief must be completed, failed, or cancelled before re-running." },
+        { status: 400 },
+      )
+    }
+
     const admin = createAdminClient()
     const normalizedWithOverrides = withOverrides(parsedNormalized, overrides)
-    const modeWithOverride = overrides?.mode ?? brief.mode
     const optional = normalizedWithOverrides.optional as Record<string, unknown>
     const searchDepth = parseSearchDepth(optional.search_depth)
 
     const { error: briefUpdateError } = await admin
       .from("briefs")
       .update({
-        mode: modeWithOverride,
         normalized_brief: normalizedWithOverrides,
       })
       .eq("id", body.brief_id)
@@ -390,6 +414,7 @@ export async function POST(request: Request) {
       brief_id: body.brief_id,
       status: "running",
       notes: [],
+      started_at: new Date().toISOString(),
     })
     if (runError) return NextResponse.json({ error: runError.message }, { status: 500 })
 

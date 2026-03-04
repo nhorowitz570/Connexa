@@ -2,10 +2,12 @@ import { notFound } from "next/navigation"
 
 import { AiSummary } from "@/components/brief/ai-summary"
 import { BriefDetailClient } from "@/components/brief/brief-detail-client"
+import { BriefNameEditor } from "@/components/brief/brief-name-editor"
 import { BriefStatusBadge } from "@/components/brief/brief-status-badge"
 import { BriefSummaryCard } from "@/components/brief/brief-summary-card"
 import { ExportDropdown } from "@/components/brief/export-dropdown"
 import { LowConfidenceTips } from "@/components/brief/low-confidence-tips"
+import { CancelBriefButton } from "@/components/pipeline/cancel-brief-button"
 import { RerunButton } from "@/components/pipeline/rerun-button"
 import { ResultCard } from "@/components/results/result-card"
 import { Badge } from "@/components/ui/badge"
@@ -14,6 +16,7 @@ import { Separator } from "@/components/ui/separator"
 import { CONFIDENCE } from "@/lib/constants"
 import { NormalizedBriefSchema, ScoredResultSchema } from "@/lib/schemas"
 import { createClient } from "@/lib/supabase/server"
+import { formatDuration, parseDurationFromNotes } from "@/lib/utils"
 import type { ScoredResult } from "@/types"
 
 function parseResultRow(row: {
@@ -89,8 +92,9 @@ export default async function BriefDetailPage({
   const brief = briefData as
     | {
         id: string
+        name: string | null
         mode: "simple" | "detailed"
-        status: "draft" | "clarifying" | "running" | "complete" | "failed"
+        status: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
         normalized_brief: unknown
         weights: unknown
       }
@@ -107,10 +111,12 @@ export default async function BriefDetailPage({
 
   const runs = (runsData as Array<{
     id: string
-    status: "running" | "complete" | "failed"
+    status: "running" | "complete" | "failed" | "cancelled"
     confidence_overall: number | null
     notes: unknown
     search_queries: unknown
+    started_at: string | null
+    completed_at: string | null
     created_at: string
   }> | null) ?? []
 
@@ -156,14 +162,21 @@ export default async function BriefDetailPage({
     latestRun.confidence_overall < CONFIDENCE.MIN_FOR_SUCCESS
 
   const normalizedBrief = NormalizedBriefSchema.safeParse(brief.normalized_brief)
+  const fallbackBriefName = normalizedBrief.success ? normalizedBrief.data.service_type : "Untitled brief"
+  const latestRunNotes = Array.isArray(latestRun?.notes)
+    ? latestRun.notes.filter((value): value is string => typeof value === "string")
+    : []
+  const latestRunDuration = latestRun?.status === "running"
+    ? "Running..."
+    : formatDuration(latestRun?.started_at ?? null, latestRun?.completed_at ?? null) ??
+      parseDurationFromNotes(latestRunNotes)
+  const latestRunDurationLabel = latestRunDuration ? `AI duration: ${latestRunDuration}` : null
   const latestRunForClient = latestRun
     ? {
         id: latestRun.id,
         status: latestRun.status,
         confidence_overall: latestRun.confidence_overall,
-        notes: Array.isArray(latestRun.notes)
-          ? latestRun.notes.filter((value): value is string => typeof value === "string")
-          : [],
+        notes: latestRunNotes,
       }
     : null
   const exportRun = latestRun
@@ -171,9 +184,7 @@ export default async function BriefDetailPage({
         id: latestRun.id,
         status: latestRun.status,
         confidence_overall: latestRun.confidence_overall,
-        notes: Array.isArray(latestRun.notes)
-          ? latestRun.notes.filter((value): value is string => typeof value === "string")
-          : [],
+        notes: latestRunNotes,
         search_queries: Array.isArray(latestRun.search_queries)
           ? latestRun.search_queries.filter((value): value is string => typeof value === "string")
           : [],
@@ -185,8 +196,9 @@ export default async function BriefDetailPage({
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Brief Detail</h1>
+          <BriefNameEditor briefId={brief.id} initialName={brief.name} fallbackName={fallbackBriefName} />
           <p className="text-sm text-muted-foreground">Review brief context and ranked provider matches.</p>
+          {latestRunDurationLabel ? <p className="text-xs text-muted-foreground">{latestRunDurationLabel}</p> : null}
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="secondary">{brief.mode}</Badge>
@@ -214,9 +226,10 @@ export default async function BriefDetailPage({
           />
           <RerunButton
             briefId={brief.id}
-            mode={brief.mode}
+            status={brief.status}
             normalizedBrief={normalizedBrief.success ? normalizedBrief.data : brief.normalized_brief}
           />
+          {brief.status === "running" ? <CancelBriefButton briefId={brief.id} /> : null}
         </div>
       </div>
 

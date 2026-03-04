@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { type FormEvent, useMemo, useState } from "react"
+import { type FormEvent, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
   Zap, Settings2, ArrowRight, Calendar, DollarSign, Tag,
@@ -10,6 +10,15 @@ import {
 } from "lucide-react"
 
 import { CONFIDENCE } from "@/lib/constants"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { NormalizeResponseSchema, QuestionsPayloadSchema } from "@/lib/schemas"
 import { createClient } from "@/lib/supabase/client"
 import { ensureProfileExists } from "@/lib/supabase/ensure-profile"
@@ -26,6 +35,13 @@ const categories = [
   "Consulting Firm", "Cloud Provider", "Analytics Provider",
   "DevOps Partner", "Security Vendor",
 ]
+
+const CITY_RELEVANT_CATEGORIES = new Set([
+  "Marketing Agency",
+  "Design Studio",
+  "Consulting Firm",
+  "Other",
+])
 
 function applyByPath(base: Record<string, unknown>, path: string, value: unknown) {
   const segments = path.split(".")
@@ -47,6 +63,120 @@ const formatBudget = (value: number) => {
   return `$${value}`
 }
 
+function truncateText(value: string, maxLength: number): string {
+  const cleaned = value.replace(/\s+/g, " ").trim()
+  if (cleaned.length <= maxLength) return cleaned
+  return `${cleaned.slice(0, Math.max(0, maxLength - 1))}…`
+}
+
+function buildPreparationSteps(input: {
+  mode: Mode
+  prompt: string
+  category: string
+  customCategory: string
+  industry: string
+  region: string
+  city: string
+  budget: number
+  deadline: string
+  searchDepth: SearchDepth
+  description: string
+}): string[] {
+  const steps: string[] = ["Checking your brief inputs"]
+
+  if (input.mode === "simple") {
+    if (input.prompt.trim().length > 0) {
+      steps.push(`Reviewing your prompt: "${truncateText(input.prompt, 58)}"`)
+    }
+  } else {
+    const categoryValue =
+      input.category === "Other" ? input.customCategory.trim() : input.category.trim()
+    if (categoryValue.length > 0) {
+      steps.push(`Mapping category: ${truncateText(categoryValue, 42)}`)
+    }
+    if (input.industry.trim().length > 0) {
+      steps.push(`Applying industry context: ${truncateText(input.industry, 42)}`)
+    }
+    if (input.region.trim().length > 0) {
+      steps.push(`Setting geography focus: ${truncateText(input.region, 42)}`)
+    }
+    if (input.city.trim().length > 0) {
+      steps.push(`Adding city signal: ${truncateText(input.city, 42)}`)
+    }
+    steps.push(`Applying budget target: ${formatBudget(input.budget)}`)
+    if (input.deadline) {
+      steps.push(`Interpreting deadline: ${input.deadline}`)
+    }
+    if (input.description.trim().length > 0) {
+      steps.push("Extracting requirements from your project description")
+    }
+  }
+
+  steps.push(
+    input.searchDepth === "deep"
+      ? "Preparing deep-search configuration"
+      : "Preparing standard-search configuration",
+  )
+  steps.push("Normalizing your brief with AI")
+  steps.push("Creating pipeline run tracker")
+
+  return [...new Set(steps)].slice(0, 8)
+}
+
+type PreparingPipelineCardProps = {
+  steps: string[]
+}
+
+function PreparingPipelineCard({ steps }: PreparingPipelineCardProps) {
+  const [activeStepIndex, setActiveStepIndex] = useState(0)
+
+  useEffect(() => {
+    if (steps.length <= 1) return
+    const interval = window.setInterval(() => {
+      setActiveStepIndex((current) => (current + 1) % steps.length)
+    }, 1700)
+
+    return () => {
+      window.clearInterval(interval)
+    }
+  }, [steps.length])
+
+  const safeActiveStepIndex = steps.length > 0 ? activeStepIndex % steps.length : 0
+  const activeStep = steps[safeActiveStepIndex] ?? "Preparing run setup"
+
+  return (
+    <div className="rounded-2xl border border-[#1F1F1F] bg-[#0D0D0D] p-8 text-center">
+      <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/10">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+      </div>
+      <h1 className="mb-2 text-2xl font-semibold text-white">Preparing Pipeline Run</h1>
+      <p className="text-[#919191]">Normalizing brief and starting real-time pipeline tracking...</p>
+
+      <div className="mx-auto mt-6 w-full max-w-xl rounded-xl border border-[#2A2A2A] bg-[#121212] p-4 text-left">
+        <p className="text-xs uppercase tracking-wide text-[#7f7f7f]">Working through setup</p>
+        <div className="relative mt-2 h-6 overflow-hidden">
+          <p
+            key={`${activeStepIndex}-${activeStep}`}
+            className="absolute inset-0 text-sm text-white animate-in fade-in slide-in-from-bottom-2 duration-300"
+          >
+            {activeStep}
+          </p>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {steps.map((_, index) => (
+            <span
+              key={index}
+              className={`h-1.5 rounded-full transition-all ${
+                index === safeActiveStepIndex ? "w-6 bg-indigo-400" : "w-2 bg-[#2d2d2d]"
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function NewBriefPage() {
   const router = useRouter()
   const [mode, setMode] = useState<Mode>(null)
@@ -56,6 +186,7 @@ export default function NewBriefPage() {
 
   // Form state
   const [prompt, setPrompt] = useState("")
+  const [briefName, setBriefName] = useState("")
   const [category, setCategory] = useState("")
   const [customCategory, setCustomCategory] = useState("")
   const [budget, setBudget] = useState(50000)
@@ -67,6 +198,9 @@ export default function NewBriefPage() {
   const [searchDepth, setSearchDepth] = useState<SearchDepth>("standard")
   const [description, setDescription] = useState("")
   const [loading, setLoading] = useState(false)
+  const [canceling, setCanceling] = useState(false)
+  const [deepWarningOpen, setDeepWarningOpen] = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
 
   // Clarification state
   const [clarificationPayload, setClarificationPayload] = useState<QuestionsPayload | null>(null)
@@ -78,6 +212,23 @@ export default function NewBriefPage() {
     if (mode === "simple") return prompt.trim().length >= 10
     return description.trim().length >= 10
   }, [mode, prompt, description])
+  const preparationSteps = useMemo(
+    () =>
+      buildPreparationSteps({
+        mode,
+        prompt,
+        category,
+        customCategory,
+        industry,
+        region,
+        city,
+        budget,
+        deadline,
+        searchDepth,
+        description,
+      }),
+    [mode, prompt, category, customCategory, industry, region, city, budget, deadline, searchDepth, description],
+  )
 
   const startPipeline = async (id: string): Promise<string> => {
     const response = await fetch("/api/pipeline/start", {
@@ -97,8 +248,21 @@ export default function NewBriefPage() {
   }
 
   const handleModeSelect = (selectedMode: "simple" | "detailed") => {
+    if (selectedMode === "simple") {
+      setSearchDepth("standard")
+    }
     setMode(selectedMode)
     setStep("form")
+  }
+
+  const handleSearchDepthChange = (nextDepth: SearchDepth) => {
+    if (nextDepth === "standard") {
+      setSearchDepth("standard")
+      return
+    }
+
+    if (searchDepth === "deep") return
+    setDeepWarningOpen(true)
   }
 
   const applySearchDepth = (brief: NormalizedBrief): NormalizedBrief => {
@@ -115,6 +279,32 @@ export default function NewBriefPage() {
     if (!briefId) return
     router.push(`/brief/${briefId}`)
     router.refresh()
+  }
+
+  const handleCancelBrief = async () => {
+    if (!briefId) return
+
+    setCanceling(true)
+    try {
+      const response = await fetch("/api/pipeline/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief_id: briefId }),
+      })
+      const payload = (await response.json()) as { error?: string }
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to cancel brief.")
+      }
+      setCancelDialogOpen(false)
+      toast.success("Brief cancelled.")
+      router.push(`/brief/${briefId}`)
+      router.refresh()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to cancel brief."
+      toast.error(message)
+    } finally {
+      setCanceling(false)
+    }
   }
 
   const handleSubmit = async (event?: FormEvent<HTMLFormElement>) => {
@@ -143,12 +333,18 @@ export default function NewBriefPage() {
           city && `City: ${city}`,
           description.trim(),
         ].filter(Boolean).join("\n")
+      const nextName = briefName.trim()
+      const nextCategory = mode === "detailed"
+        ? (category === "Other" ? customCategory.trim() : category.trim()) || null
+        : null
 
       const { data: brief, error: insertError } = await supabase
         .from("briefs")
         .insert({
           user_id: user.id,
           mode: mode ?? "simple",
+          name: nextName.length > 0 ? nextName : null,
+          category: nextCategory,
           raw_prompt: rawPrompt,
           status: "draft",
         })
@@ -354,34 +550,49 @@ export default function NewBriefPage() {
             className="bg-[#0D0D0D] rounded-2xl p-8 border border-[#1F1F1F]"
             onSubmit={handleSubmit}
           >
-            <div className="mb-6 space-y-3 rounded-xl border border-[#333] bg-[#111] p-4">
-              <p className="text-sm font-medium text-white">Search Depth</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setSearchDepth("standard")}
-                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                    searchDepth === "standard"
-                      ? "border-indigo-500/60 bg-indigo-500/10 text-white"
-                      : "border-[#333] text-[#919191] hover:text-white"
-                  }`}
-                >
-                  <p className="font-medium">Standard</p>
-                  <p className="text-xs opacity-80">Faster run with focused coverage.</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSearchDepth("deep")}
-                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                    searchDepth === "deep"
-                      ? "border-indigo-500/60 bg-indigo-500/10 text-white"
-                      : "border-[#333] text-[#919191] hover:text-white"
-                  }`}
-                >
-                  <p className="font-medium">Deep</p>
-                  <p className="text-xs opacity-80">Broader crawl, more candidates, slower run.</p>
-                </button>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">Brief Name (optional)</label>
+                <input
+                  type="text"
+                  value={briefName}
+                  onChange={(e) => setBriefName(e.target.value)}
+                  placeholder="e.g. Q2 SEO Agency Search"
+                  className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white placeholder-[#666] focus:outline-none focus:border-indigo-500/50 transition-colors"
+                />
               </div>
+
+              {mode === "detailed" && (
+                <div className="space-y-3 rounded-xl border border-[#333] bg-[#111] p-4">
+                  <p className="text-sm font-medium text-white">Search Depth</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSearchDepthChange("standard")}
+                      className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                        searchDepth === "standard"
+                          ? "border-indigo-500/60 bg-indigo-500/10 text-white"
+                          : "border-[#333] text-[#919191] hover:text-white"
+                      }`}
+                    >
+                      <p className="font-medium">Standard</p>
+                      <p className="text-xs opacity-80">Faster run with focused coverage.</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSearchDepthChange("deep")}
+                      className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                        searchDepth === "deep"
+                          ? "border-indigo-500/60 bg-indigo-500/10 text-white"
+                          : "border-[#333] text-[#919191] hover:text-white"
+                      }`}
+                    >
+                      <p className="font-medium">Deep</p>
+                      <p className="text-xs opacity-80">Broader crawl, more candidates, slower run.</p>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {mode === "simple" ? (
@@ -411,6 +622,7 @@ export default function NewBriefPage() {
                     onChange={(e) => {
                       setCategory(e.target.value)
                       if (e.target.value !== "Other") setCustomCategory("")
+                      if (!CITY_RELEVANT_CATEGORIES.has(e.target.value)) setCity("")
                     }}
                     className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white focus:outline-none focus:border-indigo-500/50 transition-colors appearance-none cursor-pointer"
                   >
@@ -474,19 +686,21 @@ export default function NewBriefPage() {
                       className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white placeholder-[#666] focus:outline-none focus:border-indigo-500/50 transition-colors"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-white mb-2">
-                      <MapPin className="h-4 w-4 inline mr-2 text-indigo-400" />
-                      City
-                    </label>
-                    <input
-                      type="text"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="e.g. San Francisco"
-                      className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white placeholder-[#666] focus:outline-none focus:border-indigo-500/50 transition-colors"
-                    />
-                  </div>
+                  {CITY_RELEVANT_CATEGORIES.has(category) && (
+                    <div>
+                      <label className="block text-sm font-medium text-white mb-2">
+                        <MapPin className="h-4 w-4 inline mr-2 text-indigo-400" />
+                        City
+                      </label>
+                      <input
+                        type="text"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        placeholder="e.g. San Francisco"
+                        className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white placeholder-[#666] focus:outline-none focus:border-indigo-500/50 transition-colors"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -557,24 +771,85 @@ export default function NewBriefPage() {
       {step === "loading" && (
         <div className="w-full max-w-2xl animate-in fade-in zoom-in-95 duration-500">
           {!runStarted || !runId ? (
-            <div className="rounded-2xl border border-[#1F1F1F] bg-[#0D0D0D] p-8 text-center">
-              <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/10">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
-              </div>
-              <h1 className="mb-2 text-2xl font-semibold text-white">Preparing Pipeline Run</h1>
-              <p className="text-[#919191]">Normalizing brief and starting real-time pipeline tracking...</p>
+            <div>
+              <PreparingPipelineCard steps={preparationSteps} />
+              <button
+                type="button"
+                onClick={() => setCancelDialogOpen(true)}
+                disabled={canceling || !briefId}
+                className="mt-6 rounded-lg border border-[#333] px-4 py-2 text-sm text-[#919191] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {canceling ? "Cancelling..." : "Cancel"}
+              </button>
             </div>
           ) : (
-            <RunStatusPoller
-              runId={runId}
-              initialStatus="running"
-              initialConfidence={null}
-              initialNotes={[]}
-              onRunFinished={handleRunFinished}
-            />
+            <div className="space-y-4">
+              <RunStatusPoller
+                runId={runId}
+                initialStatus="running"
+                initialConfidence={null}
+                initialNotes={[]}
+                onRunFinished={handleRunFinished}
+              />
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setCancelDialogOpen(true)}
+                  disabled={canceling || !briefId}
+                  className="rounded-lg border border-[#333] px-4 py-2 text-sm text-[#919191] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {canceling ? "Cancelling..." : "Cancel"}
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}
+
+      <Dialog open={deepWarningOpen} onOpenChange={setDeepWarningOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enable Deep Search?</DialogTitle>
+            <DialogDescription>
+              Deep mode can take a very long time and uses significantly more credits.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeepWarningOpen(false)}>
+              Stay with Standard
+            </Button>
+            <Button
+              onClick={() => {
+                setSearchDepth("deep")
+                setDeepWarningOpen(false)
+              }}
+            >
+              Enable Deep Search
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={cancelDialogOpen} onOpenChange={(open) => {
+        if (!canceling) setCancelDialogOpen(open)
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Brief?</DialogTitle>
+            <DialogDescription>
+              This will stop the current run at the next safe checkpoint. Any partial results will be saved.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)} disabled={canceling}>
+              Keep Running
+            </Button>
+            <Button onClick={handleCancelBrief} disabled={canceling || !briefId}>
+              {canceling ? "Cancelling..." : "Confirm Cancel"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

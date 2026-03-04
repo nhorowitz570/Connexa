@@ -10,14 +10,14 @@ import { Progress } from "@/components/ui/progress"
 
 type RunStatusPollerProps = {
   runId: string
-  initialStatus: "running" | "complete" | "failed"
+  initialStatus: "running" | "complete" | "failed" | "cancelled"
   initialConfidence: number | null
   initialNotes: string[]
   onRunFinished?: () => void
 }
 
 type ApiStatusResponse = {
-  status: "running" | "complete" | "failed"
+  status: "running" | "complete" | "failed" | "cancelled"
   confidence_overall: number | null
   notes: string[]
   search_queries?: string[]
@@ -143,6 +143,9 @@ export function RunStatusPoller({
       if (status === "failed") {
         return `Failed after ${completedStepKeys.length} of ${PIPELINE_STEP_CONFIG.length} steps`
       }
+      if (status === "cancelled") {
+        return `Cancelled after ${completedStepKeys.length} of ${PIPELINE_STEP_CONFIG.length} steps`
+      }
       return `Completed ${PIPELINE_STEP_CONFIG.length} of ${PIPELINE_STEP_CONFIG.length} steps`
     }
 
@@ -153,17 +156,31 @@ export function RunStatusPoller({
 
   const displayNotes = notes.filter((note) => !isStepOrTagNote(note))
   const confidenceTier = confidence !== null ? getConfidenceTier(confidence) : null
+  const isDeepSearchRun = notes.some((note) => note.toLowerCase().includes("search depth: deep"))
 
   return (
     <div className="space-y-3 rounded-md border bg-card p-4">
       <div className="flex flex-wrap items-center gap-2">
         {status === "running" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
         <BriefStatusBadge
-          status={status === "running" ? "running" : status === "failed" ? "failed" : "complete"}
+          status={
+            status === "running"
+              ? "running"
+              : status === "failed"
+                ? "failed"
+                : status === "cancelled"
+                  ? "cancelled"
+                  : "complete"
+          }
         />
         {confidenceTier ? (
           <span className={`rounded-full px-2 py-1 text-xs font-medium ${confidenceTier.className}`}>
             Confidence: {confidenceTier.label}
+          </span>
+        ) : null}
+        {status === "running" && isDeepSearchRun ? (
+          <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-300">
+            Deep search may take a while. You can come back later.
           </span>
         ) : null}
       </div>

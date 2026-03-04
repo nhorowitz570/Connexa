@@ -1,4 +1,4 @@
-import { Paperclip } from "lucide-react"
+import { Loader2, Paperclip } from "lucide-react"
 
 import { MarkdownContent } from "@/components/assistant/markdown-content"
 import { MentionCard } from "@/components/assistant/mention-card"
@@ -47,6 +47,7 @@ function splitMessageByMentions(content: string): MessageSegment[] {
 
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === "user"
+  const isAssistantLoading = !isUser && message.content.trim().length === 0
   const segments = splitMessageByMentions(message.content)
   const hasMentions = segments.some((segment) => segment.type === "mention")
 
@@ -58,7 +59,12 @@ export function ChatMessage({ message }: ChatMessageProps) {
           isUser ? "bg-indigo-600 text-white" : "bg-[#161B22] text-white",
         )}
       >
-        {hasMentions ? (
+        {isAssistantLoading ? (
+          <div className="flex items-center gap-2 text-sm text-[#919191]">
+            <Loader2 className="h-4 w-4 animate-spin text-indigo-300" />
+            <span>Thinking...</span>
+          </div>
+        ) : hasMentions ? (
           <div className="space-y-1 text-sm">
             {segments.map((segment, index) => {
               if (segment.type === "mention") {

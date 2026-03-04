@@ -1,3 +1,5 @@
+import { SCORE_LABELS } from "@/lib/constants"
+
 type ReasoningPanelProps = {
   reasoning: Record<string, string> | null | undefined
 }
@@ -11,7 +13,7 @@ export function ReasoningPanel({ reasoning }: ReasoningPanelProps) {
       <div className="mt-3 space-y-2 text-sm text-muted-foreground">
         {Object.entries(reasoning).map(([criterion, text]) => (
           <div key={criterion}>
-            <p className="font-medium text-foreground">{criterion.replaceAll("_", " ")}</p>
+            <p className="font-medium text-foreground">{SCORE_LABELS[criterion] ?? criterion.replaceAll("_", " ")}</p>
             <p>{text}</p>
           </div>
         ))}

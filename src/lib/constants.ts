@@ -83,3 +83,12 @@ export const MISS_REASONS = {
   VAGUE_SCOPE: "vague_scope",
   NO_EVIDENCE: "no_evidence",
 } as const
+
+export const SCORE_LABELS: Record<string, string> = {
+  service_match: "Service Fit",
+  budget_fit: "Budget Alignment",
+  industry_fit: "Industry Relevance",
+  timeline_fit: "Timeline Compatibility",
+  geo_fit: "Location Match",
+  constraint_fit: "Requirements Met",
+}

@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server"
 type BriefRow = {
   id: string
   mode: "simple" | "detailed"
-  status: "draft" | "clarifying" | "running" | "complete" | "failed"
+  status: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
   created_at: string
   normalized_brief: unknown
 }

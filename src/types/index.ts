@@ -25,5 +25,5 @@ export type NormalizeResponse = z.infer<typeof NormalizeResponseSchema>
 export type RerunOverrides = z.infer<typeof RerunOverridesSchema>
 
 export type BriefMode = "simple" | "detailed"
-export type BriefStatus = "draft" | "clarifying" | "running" | "complete" | "failed"
-export type RunStatus = "running" | "complete" | "failed"
+export type BriefStatus = "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
+export type RunStatus = "running" | "complete" | "failed" | "cancelled"

@@ -85,7 +85,7 @@ Set extraction_confidence between 0 and 1 using this rubric:
           },
         ],
         {
-          model: MODELS.STRONG,
+          model: MODELS.WEAK,
           response_format: { type: "json_object" },
           max_tokens: 1500,
         },

@@ -2,7 +2,7 @@ type BriefExportInput = {
   brief: {
     id: string
     mode: "simple" | "detailed"
-    status: "draft" | "clarifying" | "running" | "complete" | "failed"
+    status: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
     normalized_brief: unknown
     weights: unknown
     created_at?: string
@@ -10,7 +10,7 @@ type BriefExportInput = {
   }
   run: {
     id: string
-    status: "running" | "complete" | "failed"
+    status: "running" | "complete" | "failed" | "cancelled"
     confidence_overall: number | null
     notes: string[]
     search_queries?: string[]

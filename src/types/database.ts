@@ -35,9 +35,11 @@ export type Database = {
           user_id: string
           mode: "simple" | "detailed"
           raw_prompt: string | null
+          name: string | null
+          category: string | null
           normalized_brief: Json | null
           weights: Json | null
-          status: "draft" | "clarifying" | "running" | "complete" | "failed"
+          status: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
           created_at: string
           updated_at: string
         }
@@ -46,9 +48,11 @@ export type Database = {
           user_id: string
           mode: "simple" | "detailed"
           raw_prompt?: string | null
+          name?: string | null
+          category?: string | null
           normalized_brief?: Json | null
           weights?: Json | null
-          status?: "draft" | "clarifying" | "running" | "complete" | "failed"
+          status?: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
           created_at?: string
           updated_at?: string
         }
@@ -57,9 +61,11 @@ export type Database = {
           user_id?: string
           mode?: "simple" | "detailed"
           raw_prompt?: string | null
+          name?: string | null
+          category?: string | null
           normalized_brief?: Json | null
           weights?: Json | null
-          status?: "draft" | "clarifying" | "running" | "complete" | "failed"
+          status?: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
           created_at?: string
           updated_at?: string
         }
@@ -94,31 +100,37 @@ export type Database = {
         Row: {
           id: string
           brief_id: string
-          status: "running" | "complete" | "failed"
+          status: "running" | "complete" | "failed" | "cancelled"
           confidence_overall: number | null
           notes: Json | null
           search_queries: Json | null
           shortlist: Json | null
+          started_at: string | null
+          completed_at: string | null
           created_at: string
         }
         Insert: {
           id?: string
           brief_id: string
-          status?: "running" | "complete" | "failed"
+          status?: "running" | "complete" | "failed" | "cancelled"
           confidence_overall?: number | null
           notes?: Json | null
           search_queries?: Json | null
           shortlist?: Json | null
+          started_at?: string | null
+          completed_at?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           brief_id?: string
-          status?: "running" | "complete" | "failed"
+          status?: "running" | "complete" | "failed" | "cancelled"
           confidence_overall?: number | null
           notes?: Json | null
           search_queries?: Json | null
           shortlist?: Json | null
+          started_at?: string | null
+          completed_at?: string | null
           created_at?: string
         }
       }
@@ -314,8 +326,8 @@ export type Database = {
     Functions: Record<string, never>
     Enums: {
       brief_mode: "simple" | "detailed"
-      brief_status: "draft" | "clarifying" | "running" | "complete" | "failed"
-      run_status: "running" | "complete" | "failed"
+      brief_status: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
+      run_status: "running" | "complete" | "failed" | "cancelled"
     }
     CompositeTypes: Record<string, never>
   }

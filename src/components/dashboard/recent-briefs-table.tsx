@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { ChevronsUpDown } from "lucide-react"
 
-type BriefStatus = "draft" | "clarifying" | "running" | "complete" | "failed"
+type BriefStatus = "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
 
 type RecentBriefRow = {
   id: string
@@ -25,6 +25,7 @@ const statusColors: Record<BriefStatus, string> = {
   running: "bg-blue-500/20 text-blue-400",
   complete: "bg-emerald-500/20 text-emerald-400",
   failed: "bg-red-500/20 text-red-400",
+  cancelled: "bg-slate-500/20 text-slate-300",
 }
 
 const statusLabels: Record<BriefStatus, string> = {
@@ -33,6 +34,7 @@ const statusLabels: Record<BriefStatus, string> = {
   running: "Running",
   complete: "Complete",
   failed: "Failed",
+  cancelled: "Cancelled",
 }
 
 function scoreColor(score: number | null) {

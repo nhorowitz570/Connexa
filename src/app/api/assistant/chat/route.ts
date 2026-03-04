@@ -116,10 +116,10 @@ export async function POST(request: Request) {
           .limit(20),
         briefRefs.length > 0
           ? supabase
-              .from("briefs")
-              .select("id, status, normalized_brief, weights")
-              .eq("user_id", user.id)
-              .in("id", briefRefs)
+            .from("briefs")
+            .select("id, status, normalized_brief, weights")
+            .eq("user_id", user.id)
+            .in("id", briefRefs)
           : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
         supabase
           .from("analytics_daily")
@@ -140,10 +140,10 @@ export async function POST(request: Request) {
     const referencedBriefIds = briefRows.map((row) => row.id)
     const { data: resultRowsRaw } = referencedBriefIds.length
       ? await supabase
-          .from("results")
-          .select("brief_id, company_name, score_overall, reasoning_summary")
-          .in("brief_id", referencedBriefIds)
-          .order("score_overall", { ascending: false })
+        .from("results")
+        .select("brief_id, company_name, score_overall, reasoning_summary")
+        .in("brief_id", referencedBriefIds)
+        .order("score_overall", { ascending: false })
       : { data: [] as Array<Record<string, unknown>> }
 
     const topResultsByBrief = new Map<string, Array<{ company_name: string; score_overall: number; reasoning_summary: string }>>()
@@ -223,7 +223,7 @@ export async function POST(request: Request) {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: MODELS.STRONG,
+        model: MODELS.CHEAP,
         stream: true,
         temperature: 0.3,
         max_tokens: 1200,

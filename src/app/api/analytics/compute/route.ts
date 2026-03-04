@@ -16,7 +16,7 @@ type ComputeInput = {
 type BriefRow = {
   id: string
   user_id: string
-  status: "draft" | "clarifying" | "running" | "complete" | "failed"
+  status: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
   normalized_brief: unknown
 }
 

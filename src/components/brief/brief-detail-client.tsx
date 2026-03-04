@@ -8,7 +8,7 @@ import { RunStatusPoller } from "@/components/pipeline/run-status-poller"
 type BriefDetailClientProps = {
   latestRun: {
     id: string
-    status: "running" | "complete" | "failed"
+    status: "running" | "complete" | "failed" | "cancelled"
     confidence_overall: number | null
     notes: string[]
   } | null

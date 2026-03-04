@@ -150,11 +150,13 @@ export async function runPipeline(
   const startedAtMs = Date.now()
 
   const updateRun = async (payload: {
-    status?: "running" | "complete" | "failed"
+    status?: "running" | "complete" | "failed" | "cancelled"
     confidence_overall?: number
     search_queries?: string[]
     shortlist?: ShortlistPayload
     notesOnly?: string[]
+    started_at?: string
+    completed_at?: string
   }) => {
     const updatePayload: Record<string, unknown> = {
       notes: payload.notesOnly ?? notes,
@@ -166,6 +168,8 @@ export async function runPipeline(
     }
     if (payload.search_queries !== undefined) updatePayload.search_queries = payload.search_queries
     if (payload.shortlist) updatePayload.shortlist = payload.shortlist
+    if (payload.started_at !== undefined) updatePayload.started_at = payload.started_at
+    if (payload.completed_at !== undefined) updatePayload.completed_at = payload.completed_at
 
     await admin.from("runs").update(updatePayload).eq("id", runId)
   }
@@ -185,7 +189,31 @@ export async function runPipeline(
     await updateRun({ notesOnly: notes })
   }
 
+  const isCancelled = async () => {
+    const { data } = await admin.from("runs").select("status").eq("id", runId).maybeSingle()
+    return data?.status === "cancelled"
+  }
+
+  const markCancelled = async () => {
+    appendNote("Pipeline cancelled by user.")
+    const completedAt = new Date().toISOString()
+    await updateRun({
+      status: "cancelled",
+      notesOnly: notes,
+      completed_at: completedAt,
+    })
+    await admin.from("briefs").update({ status: "cancelled" }).eq("id", briefId)
+  }
+
+  const stopIfCancelled = async () => {
+    if (!(await isCancelled())) return false
+    await markCancelled()
+    return true
+  }
+
   try {
+    await updateRun({ started_at: new Date(startedAtMs).toISOString(), notesOnly: notes })
+
     const { data: brief, error: briefError } = await admin.from("briefs").select("*").eq("id", briefId).single()
 
     if (briefError || !brief) {
@@ -205,6 +233,7 @@ export async function runPipeline(
     await markStep("normalize")
     appendNote(`Search depth: ${searchDepth}`)
     await updateRun({ notesOnly: notes })
+    if (await stopIfCancelled()) return
 
     const queries = await generateQueryPlan(normalized, {
       maxQueries: limits.MAX_SEARCH_QUERIES,
@@ -214,6 +243,7 @@ export async function runPipeline(
     await updateRun({ search_queries: queries })
     appendNote(`Planned ${queries.length} queries.`)
     await updateRun({ notesOnly: notes })
+    if (await stopIfCancelled()) return
 
     const raw = await exaSearch(queries, {
       limits,
@@ -224,6 +254,7 @@ export async function runPipeline(
     await markStep("search")
     appendNote(`Collected ${raw.length} raw search results.`)
     await updateRun({ notesOnly: notes })
+    if (await stopIfCancelled()) return
 
     const shortlist = await triageCandidates(raw, normalized, {
       maxCandidates: limits.MAX_SHORTLIST_CANDIDATES,
@@ -232,6 +263,7 @@ export async function runPipeline(
     await updateRun({ shortlist })
     appendNote(`Shortlisted ${shortlist.candidates.length} candidate domains.`)
     await updateRun({ notesOnly: notes })
+    if (await stopIfCancelled()) return
 
     const evidenceUrls = collectShortlistUrls(shortlist, limits)
     const evidence = await firecrawlScrape(evidenceUrls, {
@@ -243,6 +275,7 @@ export async function runPipeline(
     await markStep("evidence")
     appendNote(`Fetched evidence from ${evidence.length} pages.`)
     await updateRun({ notesOnly: notes })
+    if (await stopIfCancelled()) return
 
     if (hasTimedOut()) {
       appendNote("Execution limit reached; finalizing with partial evidence.")
@@ -253,14 +286,17 @@ export async function runPipeline(
     await markStep("extract")
     appendNote(`Extracted ${candidates.length} candidate profiles.`)
     await updateRun({ notesOnly: notes })
+    if (await stopIfCancelled()) return
 
     const scored = await scoreCandidates(candidates, normalized, weights, mode)
     await markStep("score")
     appendNote(`Scored ${scored.length} candidates.`)
     await updateRun({ notesOnly: notes })
+    if (await stopIfCancelled()) return
 
     const topResults = rankAndSelect(scored, limits.TOP_RESULTS)
     await markStep("rank")
+    if (await stopIfCancelled()) return
 
     const confidenceOverall =
       topResults.length > 0
@@ -313,21 +349,30 @@ export async function runPipeline(
     const finalStatus = confidenceOverall < CONFIDENCE.MIN_FOR_SUCCESS ? "failed" : "complete"
     const durationSeconds = Math.round((Date.now() - startedAtMs) / 1000)
     appendNote(`Pipeline duration: ${durationSeconds}s`)
+    const completedAt = new Date().toISOString()
 
     await updateRun({
       status: finalStatus,
       confidence_overall: confidenceOverall,
       notesOnly: notes,
+      completed_at: completedAt,
     })
 
     await admin.from("briefs").update({ status: finalStatus }).eq("id", briefId)
   } catch (error) {
+    if (await isCancelled()) {
+      await markCancelled()
+      return
+    }
+
     const message = error instanceof Error ? error.message : "Unknown pipeline error"
     appendNote(message)
+    const completedAt = new Date().toISOString()
 
     await updateRun({
       status: "failed",
       notesOnly: notes,
+      completed_at: completedAt,
     })
     await admin.from("briefs").update({ status: "failed" }).eq("id", briefId)
   }

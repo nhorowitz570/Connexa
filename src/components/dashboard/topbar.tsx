@@ -4,13 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { ConnexaLogo } from "@/components/connexa-logo"
-import { Settings2, LogOut, User, Search, Plus } from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { LogOut, Search, Plus } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 type HeaderProps = {
@@ -67,30 +61,17 @@ export function Header({ email, fullName }: HeaderProps) {
           <span className="hidden sm:inline">New Brief</span>
         </Link>
 
-        {/* User Avatar Dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-indigo-500/20 flex items-center justify-center">
-              <span className="text-white text-sm font-medium">{initials}</span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48 bg-[#0D0D0D] border-[#1F1F1F] text-white">
-            <DropdownMenuItem className="focus:bg-[#1F1F1F] focus:text-white cursor-pointer text-[#919191]">
-              <User className="mr-2 h-4 w-4 text-[#919191]" />
-              <span>Profile</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild className="focus:bg-[#1F1F1F] focus:text-white cursor-pointer text-[#919191]">
-              <Link href="/settings">
-                <Settings2 className="mr-2 h-4 w-4 text-[#919191]" />
-                <span>Settings</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleLogout} className="focus:bg-[#1F1F1F] focus:text-white cursor-pointer text-[#919191]">
-              <LogOut className="mr-2 h-4 w-4 text-[#919191]" />
-              <span>Logout</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center">
+          <span className="text-white text-sm font-medium">{initials}</span>
+        </div>
+
+        <button
+          onClick={handleLogout}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#333] text-[#919191] transition-colors hover:text-white md:hidden"
+          aria-label="Log out"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
       </div>
     </header>
   )

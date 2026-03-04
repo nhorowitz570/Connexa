@@ -20,11 +20,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { NormalizedBriefSchema, QuestionsPayloadSchema } from "@/lib/schemas"
-import type { BriefMode, QuestionsPayload } from "@/types"
+import type { BriefStatus, QuestionsPayload } from "@/types"
 
 type RerunButtonProps = {
   briefId: string
-  mode: BriefMode
+  status: BriefStatus
   normalizedBrief: unknown
 }
 
@@ -42,13 +42,13 @@ type StartResponse = {
   error?: string
 }
 
-export function RerunButton({ briefId, mode, normalizedBrief }: RerunButtonProps) {
+export function RerunButton({ briefId, status, normalizedBrief }: RerunButtonProps) {
   const [loading, setLoading] = useState(false)
   const [submittingClarifications, setSubmittingClarifications] = useState(false)
   const [open, setOpen] = useState(false)
   const [clarificationOpen, setClarificationOpen] = useState(false)
+  const [deepWarningOpen, setDeepWarningOpen] = useState(false)
   const [clarificationPayload, setClarificationPayload] = useState<QuestionsPayload | null>(null)
-  const [modeValue, setModeValue] = useState<BriefMode>(mode)
   const [constraintsText, setConstraintsText] = useState("")
   const [regionValue, setRegionValue] = useState("")
   const [searchDepth, setSearchDepth] = useState<"standard" | "deep">("standard")
@@ -63,22 +63,31 @@ export function RerunButton({ briefId, mode, normalizedBrief }: RerunButtonProps
       ? "deep"
       : "standard"
     : "standard"
+  const canRerun = status === "complete" || status === "failed" || status === "cancelled"
 
   useEffect(() => {
     if (!open) return
-    setModeValue(mode)
     setConstraintsText(initialConstraints)
     setRegionValue(initialRegion)
     setSearchDepth(initialSearchDepth)
     setForceClarify(false)
-  }, [initialConstraints, initialRegion, initialSearchDepth, mode, open])
+  }, [initialConstraints, initialRegion, initialSearchDepth, open])
+
+  const handleSearchDepthChange = (nextDepth: "standard" | "deep") => {
+    if (nextDepth === "standard") {
+      setSearchDepth("standard")
+      return
+    }
+
+    if (searchDepth === "deep") return
+    setDeepWarningOpen(true)
+  }
 
   const handleRerun = async () => {
     setLoading(true)
     try {
       const parsedConstraints = splitConstraints(constraintsText)
       const overrides: Record<string, unknown> = {}
-      if (modeValue !== mode) overrides.mode = modeValue
       if (constraintsText.trim() !== initialConstraints.trim()) overrides.constraints = parsedConstraints
       if (regionValue.trim() && regionValue.trim() !== initialRegion.trim()) {
         overrides.geography_region = regionValue.trim()
@@ -105,7 +114,8 @@ export function RerunButton({ briefId, mode, normalizedBrief }: RerunButtonProps
       if (payload.clarify_required) {
         const questions = QuestionsPayloadSchema.safeParse(payload.questions)
         if (!questions.success) {
-          toast.error("Clarification questions were invalid.")
+          console.error("Invalid clarification payload from rerun start:", questions.error.issues)
+          toast.error("Could not parse clarification questions. Try re-running without 'Ask clarifying questions'.")
           return
         }
         setOpen(false)
@@ -156,7 +166,9 @@ export function RerunButton({ briefId, mode, normalizedBrief }: RerunButtonProps
     <>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline">Re-run</Button>
+          <Button variant="outline" disabled={!canRerun}>
+            Re-run
+          </Button>
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
@@ -165,19 +177,6 @@ export function RerunButton({ briefId, mode, normalizedBrief }: RerunButtonProps
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="rerun-mode">Mode</Label>
-              <Select value={modeValue} onValueChange={(value) => setModeValue(value as BriefMode)}>
-                <SelectTrigger id="rerun-mode">
-                  <SelectValue placeholder="Select mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="simple">Simple</SelectItem>
-                  <SelectItem value="detailed">Detailed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="rerun-region">Geography override</Label>
               <Input
@@ -200,7 +199,7 @@ export function RerunButton({ briefId, mode, normalizedBrief }: RerunButtonProps
 
             <div className="space-y-2">
               <Label htmlFor="rerun-depth">Search depth</Label>
-              <Select value={searchDepth} onValueChange={(value) => setSearchDepth(value as "standard" | "deep")}>
+              <Select value={searchDepth} onValueChange={(value) => handleSearchDepthChange(value as "standard" | "deep")}>
                 <SelectTrigger id="rerun-depth">
                   <SelectValue placeholder="Select search depth" />
                 </SelectTrigger>
@@ -245,6 +244,30 @@ export function RerunButton({ briefId, mode, normalizedBrief }: RerunButtonProps
               onSubmit={handleClarificationSubmit}
             />
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deepWarningOpen} onOpenChange={setDeepWarningOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enable Deep Search?</DialogTitle>
+            <DialogDescription>
+              Deep mode can take a very long time and uses significantly more credits.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeepWarningOpen(false)}>
+              Stay with Standard
+            </Button>
+            <Button
+              onClick={() => {
+                setSearchDepth("deep")
+                setDeepWarningOpen(false)
+              }}
+            >
+              Enable Deep Search
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

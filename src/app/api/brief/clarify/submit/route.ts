@@ -12,6 +12,55 @@ type ClarificationSubmitInput = {
   answers?: Record<string, unknown>
 }
 
+function dedupeOptions(values: unknown): string[] {
+  if (!Array.isArray(values)) return []
+  return [...new Set(values.filter((value): value is string => typeof value === "string").map((value) => value.trim()).filter(Boolean))]
+}
+
+function coerceQuestionsPayload(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+
+  const payload = raw as { questions?: unknown }
+  if (!Array.isArray(payload.questions)) return null
+
+  const questions = payload.questions
+    .flatMap((question) => {
+      if (!question || typeof question !== "object" || Array.isArray(question)) return []
+      const source = question as Record<string, unknown>
+      const id = typeof source.id === "string" ? source.id.trim() : ""
+      const prompt = typeof source.prompt === "string" ? source.prompt.trim() : ""
+      const fieldPath = typeof source.fieldPath === "string" ? source.fieldPath.trim() : ""
+      if (!id || !prompt || !fieldPath) return []
+
+      const type = source.type === "multiple_choice" || source.type === "select" || source.type === "number"
+        ? source.type
+        : "text"
+      const options = dedupeOptions(source.options)
+      if ((type === "multiple_choice" || type === "select") && options.length < 2) {
+        return []
+      }
+
+      return [{
+        id,
+        prompt,
+        fieldPath,
+        type,
+        options: options.length > 0 ? options : undefined,
+        allowOther: Boolean(source.allowOther),
+        required: Boolean(source.required),
+        priority: source.priority === "high" || source.priority === "low" ? source.priority : "medium",
+      }]
+    })
+    .slice(0, 5)
+
+  if (questions.length === 0) return null
+
+  return {
+    type: "connexa.clarifications.v1",
+    questions,
+  }
+}
+
 function applyByPath(base: Record<string, unknown>, path: string, value: unknown) {
   const segments = path.split(".")
   let cursor: Record<string, unknown> = base
@@ -70,9 +119,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No clarification questions found." }, { status: 400 })
     }
 
-    const payload = QuestionsPayloadSchema.safeParse(questionRow.questions)
+    let payload = QuestionsPayloadSchema.safeParse(questionRow.questions)
     if (!payload.success) {
-      return NextResponse.json({ error: "Clarification questions are invalid." }, { status: 400 })
+      const coerced = coerceQuestionsPayload(questionRow.questions)
+      if (coerced) {
+        payload = QuestionsPayloadSchema.safeParse(coerced)
+      }
+    }
+    if (!payload.success) {
+      return NextResponse.json(
+        { error: "Clarification questions are invalid. Please start a rerun without clarification and try again." },
+        { status: 400 },
+      )
     }
 
     const merged = structuredClone(normalizedResult.data) as Record<string, unknown>
@@ -110,6 +168,7 @@ export async function POST(request: Request) {
       brief_id: body.brief_id,
       status: "running",
       notes: [],
+      started_at: new Date().toISOString(),
     })
     if (runError) return NextResponse.json({ error: runError.message }, { status: 500 })
 

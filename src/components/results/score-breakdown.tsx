@@ -1,3 +1,4 @@
+import { SCORE_LABELS } from "@/lib/constants"
 import type { ScoreBreakdown } from "@/types"
 
 type ScoreBreakdownProps = {
@@ -17,7 +18,7 @@ export function ScoreBreakdown({ breakdown }: ScoreBreakdownProps) {
       {Object.entries(breakdown).map(([key, score]) => (
         <div key={key} className="space-y-1">
           <div className="flex justify-between text-xs">
-            <span className="capitalize">{key.replaceAll("_", " ")}</span>
+            <span>{SCORE_LABELS[key] ?? key.replaceAll("_", " ")}</span>
             <span>{score}</span>
           </div>
           <div className="h-2 rounded bg-[#30363D]">

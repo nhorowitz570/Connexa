@@ -12,15 +12,32 @@ type ClarifyInput = {
   brief_id?: string
 }
 
+function normalizeOptions(options: unknown, fallback: string[] = []): string[] {
+  const deduped = Array.isArray(options)
+    ? [...new Set(options.filter((value): value is string => typeof value === "string").map((value) => value.trim()).filter(Boolean))]
+    : []
+
+  if (deduped.length >= 2) return deduped
+
+  for (const option of fallback) {
+    if (!deduped.includes(option)) deduped.push(option)
+    if (deduped.length >= 2) break
+  }
+  return deduped
+}
+
 function fallbackClarifications(): QuestionsPayload {
   return {
     type: "connexa.clarifications.v1",
     questions: [
       {
         id: "priority_focus",
-        prompt: "What is the most important selection criterion?",
+        prompt: "What is the most important selection criteria?",
         type: "multiple_choice",
-        options: ["Specialized expertise", "Lower cost", "Faster timeline", "Industry experience"],
+        options: normalizeOptions(
+          ["Specialized expertise", "Lower cost", "Faster timeline", "Industry experience"],
+          ["Specialized expertise", "Lower cost"],
+        ),
         allowOther: false,
         required: true,
         helpText: "We will bias rankings toward this priority.",
@@ -45,14 +62,20 @@ function fallbackClarifications(): QuestionsPayload {
 }
 
 function normalizeQuestionPayload(payload: QuestionsPayload): QuestionsPayload {
-  return {
+  const normalized: QuestionsPayload = {
     type: payload.type,
     questions: payload.questions.slice(0, 5).map((question) => ({
       ...question,
       priority: question.priority ?? "medium",
       type: question.type ?? "multiple_choice",
+      options:
+        question.type === "multiple_choice" || question.type === "select"
+          ? normalizeOptions(question.options, ["Option A", "Option B"])
+          : question.options,
     })),
   }
+
+  return QuestionsPayloadSchema.parse(normalized)
 }
 
 async function generateClarificationsWithModel(
@@ -107,7 +130,7 @@ Rules:
         },
       ],
       {
-        model: MODELS.WEAK,
+        model: MODELS.CHEAP,
         response_format: { type: "json_object" },
       },
     )

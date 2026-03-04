@@ -28,6 +28,20 @@ function getPriorityLabel(priority: Question["priority"]): string {
   return (priority ?? "medium").replace(/^\w/, (char) => char.toUpperCase())
 }
 
+function isDeadlineQuestion(question: Question): boolean {
+  if (question.type !== "text") return false
+  const fieldPath = question.fieldPath.toLowerCase()
+  const id = question.id.toLowerCase()
+  const prompt = question.prompt.toLowerCase()
+
+  return (
+    fieldPath === "timeline.deadline" ||
+    fieldPath.endsWith(".deadline") ||
+    id.includes("deadline") ||
+    prompt.includes("deadline")
+  )
+}
+
 export function ClarificationRenderer({
   payload,
   submitting,
@@ -256,17 +270,30 @@ export function ClarificationRenderer({
                 ) : null}
 
                 {question.type === "text" ? (
-                  <Textarea
-                    value={selectedValue}
-                    onChange={(event) =>
-                      setSelectedAnswers((current) => ({
-                        ...current,
-                        [question.id]: event.target.value,
-                      }))
-                    }
-                    placeholder="Type your answer"
-                    rows={3}
-                  />
+                  isDeadlineQuestion(question) ? (
+                    <Input
+                      type="date"
+                      value={selectedValue}
+                      onChange={(event) =>
+                        setSelectedAnswers((current) => ({
+                          ...current,
+                          [question.id]: event.target.value,
+                        }))
+                      }
+                    />
+                  ) : (
+                    <Textarea
+                      value={selectedValue}
+                      onChange={(event) =>
+                        setSelectedAnswers((current) => ({
+                          ...current,
+                          [question.id]: event.target.value,
+                        }))
+                      }
+                      placeholder="Type your answer"
+                      rows={3}
+                    />
+                  )
                 ) : null}
 
                 {question.type === "number" ? (

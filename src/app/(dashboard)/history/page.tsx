@@ -1,11 +1,12 @@
 import Link from "next/link"
 
-import { BriefListItem } from "@/components/dashboard/brief-list-item"
+import { HistoryClient } from "@/components/dashboard/history-client"
 import { EmptyState } from "@/components/dashboard/empty-state"
 import { HistoryFilters } from "@/components/dashboard/history-filters"
 import { HistoryInsights } from "@/components/dashboard/history-insights"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/server"
+import { formatDuration, parseDurationFromNotes } from "@/lib/utils"
 
 const PAGE_SIZE = 10
 const UUID_PATTERN =
@@ -14,13 +15,22 @@ const UUID_PATTERN =
 type HistorySearchParams = {
   page?: string
   mode?: "all" | "simple" | "detailed"
-  status?: "all" | "draft" | "clarifying" | "running" | "complete" | "failed"
+  status?: "all" | "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
   q?: string
 }
 
 type ResultRow = {
   brief_id: string
   score_overall: number
+}
+
+type RunSummaryRow = {
+  brief_id: string
+  status: "running" | "complete" | "failed" | "cancelled"
+  started_at: string | null
+  completed_at: string | null
+  notes: unknown
+  created_at: string
 }
 
 function topScoreByBrief(rows: ResultRow[]) {
@@ -35,6 +45,16 @@ function topScoreByBrief(rows: ResultRow[]) {
 
 function sanitizeSearchTerm(input: string) {
   return input.replace(/[%_,]/g, " ").trim().split(/\s+/).join("%")
+}
+
+function latestRunByBrief(rows: RunSummaryRow[]) {
+  const map = new Map<string, RunSummaryRow>()
+  for (const row of rows) {
+    if (!map.has(row.brief_id)) {
+      map.set(row.brief_id, row)
+    }
+  }
+  return map
 }
 
 export default async function HistoryPage({
@@ -94,7 +114,7 @@ export default async function HistoryPage({
 
   let query = supabase
     .from("briefs")
-    .select("id, mode, status, created_at, normalized_brief", { count: "exact" })
+    .select("id, name, category, mode, status, created_at, normalized_brief", { count: "exact" })
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
 
@@ -109,7 +129,7 @@ export default async function HistoryPage({
       if (safeTerm.length > 0) {
         const pattern = `%${safeTerm}%`
         query = query.or(
-          `raw_prompt.ilike.${pattern},normalized_brief->>service_type.ilike.${pattern}`,
+          `name.ilike.${pattern},raw_prompt.ilike.${pattern},normalized_brief->>service_type.ilike.${pattern}`,
         )
       }
     }
@@ -125,8 +145,16 @@ export default async function HistoryPage({
       .in("brief_id", briefIds)
       .order("score_overall", { ascending: false })
     : { data: [] as ResultRow[] }
+  const { data: latestRunsRaw } = briefIds.length
+    ? await supabase
+      .from("runs")
+      .select("brief_id, status, started_at, completed_at, notes, created_at")
+      .in("brief_id", briefIds)
+      .order("created_at", { ascending: false })
+    : { data: [] as RunSummaryRow[] }
 
   const scoreByBrief = topScoreByBrief((results ?? []) as ResultRow[])
+  const runsByBrief = latestRunByBrief((latestRunsRaw ?? []) as RunSummaryRow[])
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE))
 
@@ -163,25 +191,35 @@ export default async function HistoryPage({
           actionHref="/brief/new"
         />
       ) : (
-        <div className="space-y-3">
-          {(briefs ?? []).map((brief) => {
+        <HistoryClient
+          briefs={(briefs ?? []).map((brief) => {
             const normalized =
               typeof brief.normalized_brief === "object" && brief.normalized_brief
                 ? (brief.normalized_brief as { service_type?: string })
                 : {}
-            return (
-              <BriefListItem
-                key={brief.id}
-                id={brief.id}
-                mode={brief.mode}
-                serviceType={normalized.service_type ?? "Untitled brief"}
-                status={brief.status}
-                createdAt={brief.created_at}
-                score={scoreByBrief.get(brief.id) ?? null}
-              />
-            )
+            const latestRun = runsByBrief.get(brief.id) ?? null
+            const notes = latestRun && Array.isArray(latestRun.notes)
+              ? latestRun.notes.filter((value): value is string => typeof value === "string")
+              : []
+            const durationLabel = latestRun
+              ? latestRun.status === "running"
+                ? "Running..."
+                : formatDuration(latestRun.started_at, latestRun.completed_at) ?? parseDurationFromNotes(notes)
+              : null
+
+            return {
+              id: brief.id,
+              mode: brief.mode,
+              name: brief.name ?? null,
+              category: brief.category ?? null,
+              serviceType: normalized.service_type ?? "Untitled brief",
+              status: brief.status,
+              createdAt: brief.created_at,
+              score: scoreByBrief.get(brief.id) ?? null,
+              durationLabel,
+            }
           })}
-        </div>
+        />
       )}
 
       <div className="flex items-center justify-between">

@@ -7,6 +7,7 @@ const labelMap: Record<BriefStatus, string> = {
   running: "Running",
   complete: "Complete",
   failed: "Failed",
+  cancelled: "Cancelled",
 }
 
 const classMap: Record<BriefStatus, string> = {
@@ -15,6 +16,7 @@ const classMap: Record<BriefStatus, string> = {
   running: "bg-blue-500/20 text-blue-400",
   complete: "bg-emerald-500/20 text-emerald-400",
   failed: "bg-red-500/20 text-red-400",
+  cancelled: "bg-slate-500/20 text-slate-300",
 }
 
 export function BriefStatusBadge({ status }: { status: BriefStatus }) {
