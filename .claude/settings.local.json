@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__filesystem__directory_tree",
+      "Bash(cat src/app/api/pipeline/status/[runId]/route.ts)",
+      "Bash(cat src/app/\\\\\\(auth\\\\\\)/login/page.tsx)",
+      "Bash(cat src/app/\\\\\\(dashboard\\\\\\)/page.tsx)",
+      "Bash(cat src/app/\\\\\\(dashboard\\\\\\)/brief/new/page.tsx)",
+      "Bash(cat src/app/\\\\\\(dashboard\\\\\\)/brief/[id]/page.tsx)",
+      "Bash(cat src/app/\\\\\\(dashboard\\\\\\)/layout.tsx)",
+      "Bash(cat src/app/\\\\\\(auth\\\\\\)/callback/route.ts)",
+      "Bash(find . -name \".gitignore\" -exec cat {} ;)",
+      "mcp__filesystem__list_directory",
+      "Bash(find \"C:/Users/natep/Desktop/Connexa/connexa-dashboard/src/app/\\(dashboard\\)/brief\" -type f)",
+      "mcp__filesystem__read_text_file",
+      "Bash(find \"C:/Users/natep/Desktop/Connexa/connexa-dashboard/src/app/\\(dashboard\\)/history\" -type f)",
+      "Bash(xargs grep -l \"chat\\\\|Chat\\\\|assistant\\\\|Assistant\")"
+    ]
+  }
+}
