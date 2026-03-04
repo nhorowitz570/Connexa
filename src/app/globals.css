@@ -203,3 +203,22 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .animate-slide-up {
   animation: slideUp 0.5s ease-out;
 }
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .export-print-root {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+}

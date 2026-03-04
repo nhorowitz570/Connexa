@@ -1,10 +1,18 @@
-import { CONFIDENCE, MISS_REASONS, PIPELINE_LIMITS } from "@/lib/constants"
+import {
+  CONFIDENCE,
+  MISS_REASONS,
+  getPipelineLimits,
+  parseSearchDepth,
+  type PipelineLimits,
+  type SearchDepth,
+} from "@/lib/constants"
 import { BriefWeightsSchema, NormalizedBriefSchema } from "@/lib/schemas"
+import { exaSearch } from "@/lib/pipeline/exa"
 import { extractCandidates } from "@/lib/pipeline/extract"
+import { firecrawlScrape } from "@/lib/pipeline/firecrawl"
 import { generateQueryPlan } from "@/lib/pipeline/query-plan"
 import { rankAndSelect } from "@/lib/pipeline/rank"
 import { scoreCandidates } from "@/lib/pipeline/score"
-import { tavilyExtract, tavilySearch } from "@/lib/pipeline/tavily"
 import { triageCandidates } from "@/lib/pipeline/triage"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { BriefMode, NormalizedBrief, ShortlistPayload } from "@/types"
@@ -19,10 +27,14 @@ type PipelineStep =
   | "score"
   | "rank"
 
-function collectShortlistUrls(shortlist: ShortlistPayload): string[] {
+type RunPipelineOptions = {
+  searchDepth?: SearchDepth
+}
+
+function collectShortlistUrls(shortlist: ShortlistPayload, limits: PipelineLimits): string[] {
   return shortlist.candidates
     .flatMap((candidate) => candidate.urls)
-    .slice(0, PIPELINE_LIMITS.MAX_PAGE_FETCHES)
+    .slice(0, limits.MAX_PAGE_FETCHES)
 }
 
 function isLikelyVagueScope(serviceType: string): boolean {
@@ -128,14 +140,19 @@ function coerceNormalizedBrief(raw: unknown): NormalizedBrief {
   return NormalizedBriefSchema.parse(fallback)
 }
 
-export async function runPipeline(briefId: string, runId: string): Promise<void> {
+export async function runPipeline(
+  briefId: string,
+  runId: string,
+  options: RunPipelineOptions = {},
+): Promise<void> {
   const admin = createAdminClient()
   const notes: string[] = []
+  const startedAtMs = Date.now()
 
   const updateRun = async (payload: {
     status?: "running" | "complete" | "failed"
     confidence_overall?: number
-    tavily_queries?: string[]
+    search_queries?: string[]
     shortlist?: ShortlistPayload
     notesOnly?: string[]
   }) => {
@@ -147,7 +164,7 @@ export async function runPipeline(briefId: string, runId: string): Promise<void>
     if (payload.confidence_overall !== undefined) {
       updatePayload.confidence_overall = payload.confidence_overall
     }
-    if (payload.tavily_queries) updatePayload.tavily_queries = payload.tavily_queries
+    if (payload.search_queries !== undefined) updatePayload.search_queries = payload.search_queries
     if (payload.shortlist) updatePayload.shortlist = payload.shortlist
 
     await admin.from("runs").update(updatePayload).eq("id", runId)
@@ -163,6 +180,11 @@ export async function runPipeline(briefId: string, runId: string): Promise<void>
     await updateRun({ notesOnly: notes })
   }
 
+  const markBatchStep = async (step: "search" | "evidence", batchNumber: number, totalBatches: number) => {
+    appendNote(`step:${step}:batch:${batchNumber}/${totalBatches}`)
+    await updateRun({ notesOnly: notes })
+  }
+
   try {
     const { data: brief, error: briefError } = await admin.from("briefs").select("*").eq("id", briefId).single()
 
@@ -171,32 +193,73 @@ export async function runPipeline(briefId: string, runId: string): Promise<void>
     }
 
     const normalized = coerceNormalizedBrief(brief.normalized_brief)
+    const optional = normalized.optional as Record<string, unknown>
+    const searchDepth = options.searchDepth ?? parseSearchDepth(optional.search_depth)
+    const limits = getPipelineLimits(searchDepth)
     const weights = BriefWeightsSchema.parse(brief.weights)
     const mode = brief.mode as BriefMode
+    const timeoutMs = searchDepth === "deep" ? 5 * 60 * 1000 : 90 * 1000
+
+    const hasTimedOut = () => Date.now() - startedAtMs > timeoutMs
 
     await markStep("normalize")
+    appendNote(`Search depth: ${searchDepth}`)
+    await updateRun({ notesOnly: notes })
 
-    const queries = await generateQueryPlan(normalized)
+    const queries = await generateQueryPlan(normalized, {
+      maxQueries: limits.MAX_SEARCH_QUERIES,
+      searchDepth,
+    })
     await markStep("query_plan")
-    await updateRun({ tavily_queries: queries })
+    await updateRun({ search_queries: queries })
+    appendNote(`Planned ${queries.length} queries.`)
+    await updateRun({ notesOnly: notes })
 
-    const raw = await tavilySearch(queries.slice(0, PIPELINE_LIMITS.MAX_TAVILY_QUERIES))
+    const raw = await exaSearch(queries, {
+      limits,
+      searchDepth,
+      onBatchProgress: (batchNumber, totalBatches) =>
+        markBatchStep("search", batchNumber, totalBatches),
+    })
     await markStep("search")
+    appendNote(`Collected ${raw.length} raw search results.`)
+    await updateRun({ notesOnly: notes })
 
-    const shortlist = await triageCandidates(raw, normalized)
+    const shortlist = await triageCandidates(raw, normalized, {
+      maxCandidates: limits.MAX_SHORTLIST_CANDIDATES,
+    })
     await markStep("triage")
     await updateRun({ shortlist })
+    appendNote(`Shortlisted ${shortlist.candidates.length} candidate domains.`)
+    await updateRun({ notesOnly: notes })
 
-    const evidence = await tavilyExtract(collectShortlistUrls(shortlist))
+    const evidenceUrls = collectShortlistUrls(shortlist, limits)
+    const evidence = await firecrawlScrape(evidenceUrls, {
+      limits,
+      searchDepth,
+      onBatchProgress: (batchNumber, totalBatches) =>
+        markBatchStep("evidence", batchNumber, totalBatches),
+    })
     await markStep("evidence")
+    appendNote(`Fetched evidence from ${evidence.length} pages.`)
+    await updateRun({ notesOnly: notes })
+
+    if (hasTimedOut()) {
+      appendNote("Execution limit reached; finalizing with partial evidence.")
+      await updateRun({ notesOnly: notes })
+    }
 
     const candidates = await extractCandidates(evidence, normalized)
     await markStep("extract")
+    appendNote(`Extracted ${candidates.length} candidate profiles.`)
+    await updateRun({ notesOnly: notes })
 
     const scored = await scoreCandidates(candidates, normalized, weights, mode)
     await markStep("score")
+    appendNote(`Scored ${scored.length} candidates.`)
+    await updateRun({ notesOnly: notes })
 
-    const topResults = rankAndSelect(scored)
+    const topResults = rankAndSelect(scored, limits.TOP_RESULTS)
     await markStep("rank")
 
     const confidenceOverall =
@@ -215,9 +278,9 @@ export async function runPipeline(briefId: string, runId: string): Promise<void>
       if (insertError) throw new Error(insertError.message)
     }
 
-    if (topResults.length < PIPELINE_LIMITS.TOP_RESULTS) {
+    if (topResults.length < limits.TOP_RESULTS) {
       appendNote(
-        `Found ${topResults.length} viable candidates (target ${PIPELINE_LIMITS.TOP_RESULTS}). Consider relaxing constraints.`,
+        `Found ${topResults.length} viable candidates (target ${limits.TOP_RESULTS}). Consider relaxing constraints.`,
       )
     }
 
@@ -243,11 +306,13 @@ export async function runPipeline(briefId: string, runId: string): Promise<void>
       appendNote(`miss:${MISS_REASONS.VAGUE_SCOPE}`)
     }
     if (evidence.length === 0) {
-      appendNote("No extractable evidence pages were returned from Tavily.")
+      appendNote("No extractable evidence pages were returned from Firecrawl.")
       appendNote(`miss:${MISS_REASONS.NO_EVIDENCE}`)
     }
 
     const finalStatus = confidenceOverall < CONFIDENCE.MIN_FOR_SUCCESS ? "failed" : "complete"
+    const durationSeconds = Math.round((Date.now() - startedAtMs) / 1000)
+    appendNote(`Pipeline duration: ${durationSeconds}s`)
 
     await updateRun({
       status: finalStatus,

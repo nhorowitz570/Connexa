@@ -20,7 +20,8 @@ type ChatInputProps = {
 
 function extractBriefRefs(message: string) {
   const refs = new Set<string>()
-  for (const match of message.matchAll(BRIEF_REF_PATTERN)) {
+  const regex = new RegExp(BRIEF_REF_PATTERN)
+  for (const match of message.matchAll(regex)) {
     if (match[1]) refs.add(match[1])
   }
   return Array.from(refs)
@@ -36,6 +37,7 @@ export function ChatInput({ disabled, onSend }: ChatInputProps) {
     () => !disabled && (message.trim().length > 0 || attachments.length > 0),
     [attachments.length, disabled, message],
   )
+  const briefRefsInComposer = useMemo(() => extractBriefRefs(message), [message])
 
   const updateMentionState = (nextValue: string) => {
     const mentionMatch = nextValue.match(/(?:^|\s)@([^\s@]*)$/)
@@ -77,6 +79,16 @@ export function ChatInput({ disabled, onSend }: ChatInputProps) {
               >
                 <X className="h-3 w-3" />
               </button>
+            </Badge>
+          ))}
+        </div>
+      ) : null}
+
+      {briefRefsInComposer.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {briefRefsInComposer.map((briefId) => (
+            <Badge key={briefId} variant="secondary" className="max-w-64 gap-1">
+              <span className="truncate">@brief:{briefId}</span>
             </Badge>
           ))}
         </div>

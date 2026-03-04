@@ -51,20 +51,27 @@ export function RerunButton({ briefId, mode, normalizedBrief }: RerunButtonProps
   const [modeValue, setModeValue] = useState<BriefMode>(mode)
   const [constraintsText, setConstraintsText] = useState("")
   const [regionValue, setRegionValue] = useState("")
+  const [searchDepth, setSearchDepth] = useState<"standard" | "deep">("standard")
   const [forceClarify, setForceClarify] = useState(false)
   const router = useRouter()
 
   const parsedBrief = useMemo(() => NormalizedBriefSchema.safeParse(normalizedBrief), [normalizedBrief])
   const initialRegion = parsedBrief.success ? parsedBrief.data.geography.region : ""
   const initialConstraints = parsedBrief.success ? parsedBrief.data.constraints.join(", ") : ""
+  const initialSearchDepth: "standard" | "deep" = parsedBrief.success
+    ? parsedBrief.data.optional?.search_depth === "deep"
+      ? "deep"
+      : "standard"
+    : "standard"
 
   useEffect(() => {
     if (!open) return
     setModeValue(mode)
     setConstraintsText(initialConstraints)
     setRegionValue(initialRegion)
+    setSearchDepth(initialSearchDepth)
     setForceClarify(false)
-  }, [initialConstraints, initialRegion, mode, open])
+  }, [initialConstraints, initialRegion, initialSearchDepth, mode, open])
 
   const handleRerun = async () => {
     setLoading(true)
@@ -75,6 +82,9 @@ export function RerunButton({ briefId, mode, normalizedBrief }: RerunButtonProps
       if (constraintsText.trim() !== initialConstraints.trim()) overrides.constraints = parsedConstraints
       if (regionValue.trim() && regionValue.trim() !== initialRegion.trim()) {
         overrides.geography_region = regionValue.trim()
+      }
+      if (searchDepth !== initialSearchDepth) {
+        overrides.search_depth = searchDepth
       }
       if (forceClarify) overrides.force_clarify = true
 
@@ -186,6 +196,19 @@ export function RerunButton({ briefId, mode, normalizedBrief }: RerunButtonProps
                 onChange={(event) => setConstraintsText(event.target.value)}
                 placeholder="SOC2, healthcare case studies, timezone overlap"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="rerun-depth">Search depth</Label>
+              <Select value={searchDepth} onValueChange={(value) => setSearchDepth(value as "standard" | "deep")}>
+                <SelectTrigger id="rerun-depth">
+                  <SelectValue placeholder="Select search depth" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="standard">Standard</SelectItem>
+                  <SelectItem value="deep">Deep (broader, slower)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex items-center gap-2">

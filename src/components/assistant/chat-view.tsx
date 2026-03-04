@@ -6,10 +6,10 @@ import { toast } from "sonner"
 
 import { ChatInput } from "@/components/assistant/chat-input"
 import { ChatMessage } from "@/components/assistant/chat-message"
+import { ExportThreadDropdown } from "@/components/assistant/export-thread-dropdown"
 import { ThreadList } from "@/components/assistant/thread-list"
 import type { ChatAttachment, ChatMessage as ChatMessageType, ChatThread } from "@/components/assistant/types"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 
 type ThreadsResponse = {
@@ -34,6 +34,11 @@ function normalizeMessage(input: Record<string, unknown>): ChatMessageType {
   }
 }
 
+function isNearBottom(element: HTMLDivElement): boolean {
+  const remaining = element.scrollHeight - element.scrollTop - element.clientHeight
+  return remaining < 100
+}
+
 export function ChatView() {
   const [threads, setThreads] = useState<ChatThread[]>([])
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
@@ -41,12 +46,23 @@ export function ChatView() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [mobileThreadsOpen, setMobileThreadsOpen] = useState(false)
-  const endRef = useRef<HTMLDivElement | null>(null)
+  const scrollViewportRef = useRef<HTMLDivElement | null>(null)
+  const shouldAutoScrollRef = useRef(true)
+  const forceScrollRef = useRef(false)
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? null,
     [activeThreadId, threads],
   )
+
+  const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
+    const viewport = scrollViewportRef.current
+    if (!viewport) return
+    viewport.scrollTo({
+      top: viewport.scrollHeight,
+      behavior,
+    })
+  }
 
   const loadThreadData = async (threadId?: string | null) => {
     setLoading(true)
@@ -62,6 +78,7 @@ export function ChatView() {
       setThreads(payload.data.threads)
       setMessages(payload.data.messages.map((message) => normalizeMessage(message as Record<string, unknown>)))
       setActiveThreadId(payload.data.active_thread_id)
+      shouldAutoScrollRef.current = true
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to load assistant data."
       toast.error(message)
@@ -75,8 +92,16 @@ export function ChatView() {
   }, [])
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" })
+    if (forceScrollRef.current || shouldAutoScrollRef.current) {
+      scrollToBottom(forceScrollRef.current ? "smooth" : "auto")
+    }
+    forceScrollRef.current = false
   }, [messages])
+
+  useEffect(() => {
+    shouldAutoScrollRef.current = true
+    scrollToBottom("auto")
+  }, [activeThreadId])
 
   const createThread = async () => {
     const response = await fetch("/api/assistant/threads", {
@@ -93,8 +118,41 @@ export function ChatView() {
     return payload.data
   }
 
+  const deleteThread = async (threadId: string) => {
+    try {
+      const response = await fetch(`/api/assistant/threads/${threadId}`, {
+        method: "DELETE",
+      })
+      const payload = (await response.json().catch(() => ({}))) as { data?: { deleted: boolean }; error?: string }
+
+      if (!response.ok || !payload.data?.deleted) {
+        throw new Error(payload.error ?? "Failed to delete thread.")
+      }
+
+      const remainingThreads = threads.filter((thread) => thread.id !== threadId)
+      setThreads(remainingThreads)
+
+      if (activeThreadId === threadId) {
+        const nextThreadId = remainingThreads[0]?.id ?? null
+        if (nextThreadId) {
+          await loadThreadData(nextThreadId)
+        } else {
+          setActiveThreadId(null)
+          setMessages([])
+        }
+      }
+
+      toast.success("Conversation deleted.")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete thread."
+      toast.error(message)
+      throw error
+    }
+  }
+
   const sendMessage = async (message: string, attachments: ChatAttachment[], briefRefs: string[]) => {
     setSending(true)
+    forceScrollRef.current = true
 
     const now = new Date().toISOString()
     const userTemp: ChatMessageType = {
@@ -168,9 +226,9 @@ export function ChatView() {
             current.map((item) =>
               item.id === assistantTempId
                 ? {
-                  ...item,
-                  content: streamed,
-                }
+                    ...item,
+                    content: streamed,
+                  }
                 : item,
             ),
           )
@@ -204,6 +262,7 @@ export function ChatView() {
               toast.error(message)
             })
           }}
+          onDelete={deleteThread}
         />
       </div>
 
@@ -233,6 +292,10 @@ export function ChatView() {
                       toast.error(message)
                     })
                   }}
+                  onDelete={async (threadId) => {
+                    await deleteThread(threadId)
+                    setMobileThreadsOpen(false)
+                  }}
                 />
               </SheetContent>
             </Sheet>
@@ -241,9 +304,16 @@ export function ChatView() {
               <p className="text-xs text-[#919191]">Context-aware help across briefs and results</p>
             </div>
           </div>
+          <ExportThreadDropdown thread={activeThread} messages={messages} />
         </div>
 
-        <ScrollArea className="flex-1">
+        <div
+          ref={scrollViewportRef}
+          className="flex-1 overflow-y-auto"
+          onScroll={(event) => {
+            shouldAutoScrollRef.current = isNearBottom(event.currentTarget)
+          }}
+        >
           <div className="space-y-3 p-3">
             {loading ? (
               <p className="text-sm text-[#919191]">Loading messages...</p>
@@ -252,9 +322,8 @@ export function ChatView() {
             ) : (
               messages.map((message) => <ChatMessage key={message.id} message={message} />)
             )}
-            <div ref={endRef} />
           </div>
-        </ScrollArea>
+        </div>
 
         <ChatInput disabled={sending} onSend={sendMessage} />
       </div>

@@ -5,7 +5,7 @@ import { type FormEvent, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
   Zap, Settings2, ArrowRight, Calendar, DollarSign, Tag,
-  FileText, Search, Brain, Sparkles, CheckCircle2, Loader2,
+  FileText, Loader2,
   Building2, Globe, MapPin, Briefcase
 } from "lucide-react"
 
@@ -15,21 +15,16 @@ import { createClient } from "@/lib/supabase/client"
 import { ensureProfileExists } from "@/lib/supabase/ensure-profile"
 import type { NormalizedBrief, QuestionsPayload } from "@/types"
 import { ClarificationRenderer } from "@/components/brief/clarification-renderer"
+import { RunStatusPoller } from "@/components/pipeline/run-status-poller"
 
 type Mode = "simple" | "detailed" | null
-type Step = "select" | "form" | "loading" | "complete"
+type Step = "select" | "form" | "loading"
+type SearchDepth = "standard" | "deep"
 
 const categories = [
   "Marketing Agency", "Development Partner", "Design Studio",
   "Consulting Firm", "Cloud Provider", "Analytics Provider",
   "DevOps Partner", "Security Vendor",
-]
-
-const loadingSteps = [
-  { id: "normalize", label: "Normalizing brief", icon: Search, duration: 0 },
-  { id: "analyze", label: "Analyzing requirements", icon: Brain, duration: 0 },
-  { id: "match", label: "Matching vendors", icon: Sparkles, duration: 0 },
-  { id: "score", label: "Calculating scores", icon: CheckCircle2, duration: 0 },
 ]
 
 function applyByPath(base: Record<string, unknown>, path: string, value: unknown) {
@@ -56,7 +51,8 @@ export default function NewBriefPage() {
   const router = useRouter()
   const [mode, setMode] = useState<Mode>(null)
   const [step, setStep] = useState<Step>("select")
-  const [currentLoadingStep, setCurrentLoadingStep] = useState(0)
+  const [runId, setRunId] = useState<string | null>(null)
+  const [runStarted, setRunStarted] = useState(false)
 
   // Form state
   const [prompt, setPrompt] = useState("")
@@ -68,6 +64,7 @@ export default function NewBriefPage() {
   const [region, setRegion] = useState("")
   const [city, setCity] = useState("")
   const [industry, setIndustry] = useState("")
+  const [searchDepth, setSearchDepth] = useState<SearchDepth>("standard")
   const [description, setDescription] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -82,7 +79,7 @@ export default function NewBriefPage() {
     return description.trim().length >= 10
   }, [mode, prompt, description])
 
-  const startPipeline = async (id: string) => {
+  const startPipeline = async (id: string): Promise<string> => {
     const response = await fetch("/api/pipeline/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -92,6 +89,11 @@ export default function NewBriefPage() {
       const payload = (await response.json()) as { error?: string }
       throw new Error(payload.error ?? "Failed to start pipeline.")
     }
+    const payload = (await response.json()) as { run_id?: string; error?: string }
+    if (!payload.run_id) {
+      throw new Error(payload.error ?? "Pipeline started without a run id.")
+    }
+    return payload.run_id
   }
 
   const handleModeSelect = (selectedMode: "simple" | "detailed") => {
@@ -99,8 +101,20 @@ export default function NewBriefPage() {
     setStep("form")
   }
 
-  const setLoadingStep = (index: number) => {
-    setCurrentLoadingStep(index)
+  const applySearchDepth = (brief: NormalizedBrief): NormalizedBrief => {
+    return {
+      ...brief,
+      optional: {
+        ...brief.optional,
+        search_depth: searchDepth,
+      },
+    }
+  }
+
+  const handleRunFinished = () => {
+    if (!briefId) return
+    router.push(`/brief/${briefId}`)
+    router.refresh()
   }
 
   const handleSubmit = async (event?: FormEvent<HTMLFormElement>) => {
@@ -108,7 +122,8 @@ export default function NewBriefPage() {
     if (!canSubmit) return
     setLoading(true)
     setStep("loading")
-    setCurrentLoadingStep(0)
+    setRunId(null)
+    setRunStarted(false)
 
     try {
       const supabase = createClient()
@@ -143,8 +158,6 @@ export default function NewBriefPage() {
       if (insertError || !brief) throw new Error(insertError?.message ?? "Failed to create brief.")
       setBriefId(brief.id)
 
-      // Step 1: Normalize
-      setLoadingStep(0)
       const normalizedResponse = await fetch("/api/brief/normalize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -156,15 +169,14 @@ export default function NewBriefPage() {
       }
 
       const normalizedPayload = NormalizeResponseSchema.parse(await normalizedResponse.json())
-      setNormalizedBrief(normalizedPayload.normalized_brief)
+      const normalizedWithDepth = applySearchDepth(normalizedPayload.normalized_brief)
+      setNormalizedBrief(normalizedWithDepth)
       setWeights(normalizedPayload.weights)
 
-      // Step 2: Analyze
-      setLoadingStep(1)
       const { error: updateError } = await supabase
         .from("briefs")
         .update({
-          normalized_brief: normalizedPayload.normalized_brief,
+          normalized_brief: normalizedWithDepth,
           weights: normalizedPayload.weights,
         })
         .eq("id", brief.id)
@@ -177,7 +189,7 @@ export default function NewBriefPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             brief_id: brief.id,
-            normalized_brief: normalizedPayload.normalized_brief,
+            normalized_brief: normalizedWithDepth,
             confidence: normalizedPayload.confidence,
           }),
         })
@@ -189,29 +201,22 @@ export default function NewBriefPage() {
         const clarification = QuestionsPayloadSchema.parse(await clarificationResponse.json())
         setClarificationPayload(clarification)
         setStep("form")
+        setRunStarted(false)
+        setRunId(null)
         toast.info("Please answer clarification questions.")
         return
       }
 
-      // Step 3: Match
-      setLoadingStep(2)
-      await startPipeline(brief.id)
-
-      // Step 4: Complete
-      setLoadingStep(3)
-      await new Promise((r) => setTimeout(r, 600))
-
-      setStep("complete")
+      const nextRunId = await startPipeline(brief.id)
+      setRunId(nextRunId)
+      setRunStarted(true)
       toast.success("Brief submitted and run started.")
-
-      setTimeout(() => {
-        router.push(`/brief/${brief.id}`)
-        router.refresh()
-      }, 800)
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to submit brief."
       toast.error(message)
       setStep("form")
+      setRunStarted(false)
+      setRunId(null)
     } finally {
       setLoading(false)
     }
@@ -221,7 +226,8 @@ export default function NewBriefPage() {
     if (!briefId || !normalizedBrief || !weights || !clarificationPayload) return
     setLoading(true)
     setStep("loading")
-    setCurrentLoadingStep(2)
+    setRunStarted(false)
+    setRunId(null)
     try {
       const merged = structuredClone(normalizedBrief) as Record<string, unknown>
       for (const question of clarificationPayload.questions) {
@@ -236,22 +242,16 @@ export default function NewBriefPage() {
         .eq("id", briefId)
       if (updateError) throw new Error(updateError.message)
 
-      setLoadingStep(2)
-      await startPipeline(briefId)
-
-      setLoadingStep(3)
-      await new Promise((r) => setTimeout(r, 600))
-
-      setStep("complete")
+      const nextRunId = await startPipeline(briefId)
+      setRunId(nextRunId)
+      setRunStarted(true)
       toast.success("Clarifications saved. Run started.")
-      setTimeout(() => {
-        router.push(`/brief/${briefId}`)
-        router.refresh()
-      }, 800)
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to submit."
       toast.error(message)
       setStep("form")
+      setRunStarted(false)
+      setRunId(null)
     } finally {
       setLoading(false)
     }
@@ -354,6 +354,36 @@ export default function NewBriefPage() {
             className="bg-[#0D0D0D] rounded-2xl p-8 border border-[#1F1F1F]"
             onSubmit={handleSubmit}
           >
+            <div className="mb-6 space-y-3 rounded-xl border border-[#333] bg-[#111] p-4">
+              <p className="text-sm font-medium text-white">Search Depth</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setSearchDepth("standard")}
+                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                    searchDepth === "standard"
+                      ? "border-indigo-500/60 bg-indigo-500/10 text-white"
+                      : "border-[#333] text-[#919191] hover:text-white"
+                  }`}
+                >
+                  <p className="font-medium">Standard</p>
+                  <p className="text-xs opacity-80">Faster run with focused coverage.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSearchDepth("deep")}
+                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                    searchDepth === "deep"
+                      ? "border-indigo-500/60 bg-indigo-500/10 text-white"
+                      : "border-[#333] text-[#919191] hover:text-white"
+                  }`}
+                >
+                  <p className="font-medium">Deep</p>
+                  <p className="text-xs opacity-80">Broader crawl, more candidates, slower run.</p>
+                </button>
+              </div>
+            </div>
+
             {mode === "simple" ? (
               <div className="space-y-6">
                 <div>
@@ -525,66 +555,24 @@ export default function NewBriefPage() {
 
       {/* Loading Step */}
       {step === "loading" && (
-        <div className="w-full max-w-md animate-in fade-in zoom-in-95 duration-500">
-          <div className="text-center mb-12">
-            <div className="h-20 w-20 mx-auto rounded-2xl bg-indigo-500/10 flex items-center justify-center mb-6">
-              <Loader2 className="h-10 w-10 text-indigo-400 animate-spin" />
+        <div className="w-full max-w-2xl animate-in fade-in zoom-in-95 duration-500">
+          {!runStarted || !runId ? (
+            <div className="rounded-2xl border border-[#1F1F1F] bg-[#0D0D0D] p-8 text-center">
+              <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/10">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+              </div>
+              <h1 className="mb-2 text-2xl font-semibold text-white">Preparing Pipeline Run</h1>
+              <p className="text-[#919191]">Normalizing brief and starting real-time pipeline tracking...</p>
             </div>
-            <h1 className="text-2xl font-semibold text-white mb-2">Processing Brief</h1>
-            <p className="text-[#919191]">Our AI is analyzing your requirements</p>
-          </div>
-
-          <div className="bg-[#0D0D0D] rounded-2xl p-6 border border-[#1F1F1F]">
-            <div className="space-y-4">
-              {loadingSteps.map((loadStep, index) => {
-                const isActive = index === currentLoadingStep
-                const isComplete = index < currentLoadingStep
-                const isPending = index > currentLoadingStep
-
-                return (
-                  <div
-                    key={loadStep.id}
-                    className={`flex items-center gap-4 p-4 rounded-xl transition-all duration-500 ${isActive ? "bg-indigo-500/10 border border-indigo-500/30" :
-                      isComplete ? "bg-emerald-500/5" : "opacity-40"
-                      }`}
-                  >
-                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center transition-colors ${isActive ? "bg-indigo-500/20" :
-                      isComplete ? "bg-emerald-500/20" : "bg-[#1A1A1A]"
-                      }`}>
-                      {isComplete ? (
-                        <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                      ) : isActive ? (
-                        <loadStep.icon className="h-5 w-5 text-indigo-400 animate-pulse" />
-                      ) : (
-                        <loadStep.icon className="h-5 w-5 text-[#666]" />
-                      )}
-                    </div>
-                    <span className={`font-medium transition-colors ${isActive ? "text-white" :
-                      isComplete ? "text-emerald-400" : "text-[#666]"
-                      }`}>
-                      {loadStep.label}
-                    </span>
-                    {isActive && (
-                      <div className="ml-auto">
-                        <div className="h-2 w-2 rounded-full bg-indigo-400 animate-pulse" />
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Complete Step */}
-      {step === "complete" && (
-        <div className="w-full max-w-md text-center animate-in fade-in zoom-in-95 duration-500">
-          <div className="h-20 w-20 mx-auto rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-6">
-            <CheckCircle2 className="h-10 w-10 text-emerald-400" />
-          </div>
-          <h1 className="text-2xl font-semibold text-white mb-2">Brief Complete!</h1>
-          <p className="text-[#919191]">Redirecting to results...</p>
+          ) : (
+            <RunStatusPoller
+              runId={runId}
+              initialStatus="running"
+              initialConfidence={null}
+              initialNotes={[]}
+              onRunFinished={handleRunFinished}
+            />
+          )}
         </div>
       )}
     </div>

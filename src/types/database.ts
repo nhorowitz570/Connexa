@@ -97,7 +97,7 @@ export type Database = {
           status: "running" | "complete" | "failed"
           confidence_overall: number | null
           notes: Json | null
-          tavily_queries: Json | null
+          search_queries: Json | null
           shortlist: Json | null
           created_at: string
         }
@@ -107,7 +107,7 @@ export type Database = {
           status?: "running" | "complete" | "failed"
           confidence_overall?: number | null
           notes?: Json | null
-          tavily_queries?: Json | null
+          search_queries?: Json | null
           shortlist?: Json | null
           created_at?: string
         }
@@ -117,7 +117,7 @@ export type Database = {
           status?: "running" | "complete" | "failed"
           confidence_overall?: number | null
           notes?: Json | null
-          tavily_queries?: Json | null
+          search_queries?: Json | null
           shortlist?: Json | null
           created_at?: string
         }

@@ -17,7 +17,7 @@ export async function GET(
 
     const { data, error } = await supabase
       .from("runs")
-      .select("status, confidence_overall, notes, tavily_queries")
+      .select("status, confidence_overall, notes, search_queries")
       .eq("id", runId)
       .single()
 
@@ -29,7 +29,7 @@ export async function GET(
       status: data.status,
       confidence_overall: data.confidence_overall,
       notes: data.notes ?? [],
-      tavily_queries: Array.isArray(data.tavily_queries) ? data.tavily_queries : [],
+      search_queries: Array.isArray(data.search_queries) ? data.search_queries : [],
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch run status."

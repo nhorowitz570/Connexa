@@ -20,7 +20,7 @@ type ApiStatusResponse = {
   status: "running" | "complete" | "failed"
   confidence_overall: number | null
   notes: string[]
-  tavily_queries?: string[]
+  search_queries?: string[]
 }
 
 function extractStepKeys(notes: string[]): PipelineStepKey[] {
@@ -29,13 +29,31 @@ function extractStepKeys(notes: string[]): PipelineStepKey[] {
 
   for (const note of notes) {
     if (!note.startsWith("step:")) continue
-    const key = note.slice(5) as PipelineStepKey
+    const rawStep = note.slice(5)
+    if (rawStep.includes(":")) continue
+    const key = rawStep as PipelineStepKey
     if (validKeys.has(key) && !keys.includes(key)) {
       keys.push(key)
     }
   }
 
   return keys
+}
+
+function extractActiveSubstep(notes: string[], stepKey: PipelineStepKey | null): string | null {
+  if (!stepKey) return null
+  const prefix = `step:${stepKey}:`
+  const matching = notes.filter((note) => note.startsWith(prefix))
+  const latest = matching[matching.length - 1]
+  if (!latest) return null
+
+  const batchMatch = latest.match(/^step:[^:]+:batch:(\d+)\/(\d+)$/)
+  if (batchMatch) {
+    return `Batch ${batchMatch[1]} of ${batchMatch[2]}`
+  }
+
+  const custom = latest.slice(prefix.length).trim()
+  return custom.length > 0 ? custom : null
 }
 
 function isStepOrTagNote(note: string) {
@@ -80,7 +98,7 @@ export function RunStatusPoller({
       setStatus(payload.status)
       setConfidence(payload.confidence_overall)
       setNotes(Array.isArray(payload.notes) ? payload.notes : [])
-      setQueries(Array.isArray(payload.tavily_queries) ? payload.tavily_queries : [])
+      setQueries(Array.isArray(payload.search_queries) ? payload.search_queries : [])
     }
 
     void syncStatus()
@@ -119,6 +137,7 @@ export function RunStatusPoller({
   const activeStep = useMemo(() => {
     const completedSet = new Set(completedStepKeys)
     const nextStep = PIPELINE_STEP_CONFIG.find((step) => !completedSet.has(step.key))
+    const substep = extractActiveSubstep(notes, nextStep?.key ?? null)
 
     if (!nextStep) {
       if (status === "failed") {
@@ -128,8 +147,9 @@ export function RunStatusPoller({
     }
 
     const index = PIPELINE_STEP_CONFIG.findIndex((step) => step.key === nextStep.key)
-    return `Step ${index + 1} of ${PIPELINE_STEP_CONFIG.length}: ${nextStep.label}`
-  }, [completedStepKeys, status])
+    const label = `Step ${index + 1} of ${PIPELINE_STEP_CONFIG.length}: ${nextStep.label}`
+    return substep ? `${label} (${substep})` : label
+  }, [completedStepKeys, notes, status])
 
   const displayNotes = notes.filter((note) => !isStepOrTagNote(note))
   const confidenceTier = confidence !== null ? getConfidenceTier(confidence) : null

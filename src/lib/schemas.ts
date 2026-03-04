@@ -34,12 +34,31 @@ export const BriefWeightsSchema = z.object({
 export const QuestionSchema = z.object({
   id: z.string().min(1),
   prompt: z.string().min(1),
-  type: z.literal("multiple_choice"),
-  options: z.array(z.string().min(1)).min(2),
+  type: z.enum(["multiple_choice", "text", "select", "number"]).default("multiple_choice"),
+  options: z.array(z.string().min(1)).min(2).optional(),
   allowOther: z.boolean().default(false),
   required: z.boolean().default(false),
   helpText: z.string().optional(),
   fieldPath: z.string().min(1),
+  priority: z.enum(["high", "medium", "low"]).default("medium"),
+  validation: z
+    .object({
+      min: z.number().optional(),
+      max: z.number().optional(),
+      minLength: z.number().int().min(0).optional(),
+      maxLength: z.number().int().min(0).optional(),
+      pattern: z.string().optional(),
+    })
+    .optional(),
+}).superRefine((question, ctx) => {
+  const needsOptions = question.type === "multiple_choice" || question.type === "select"
+  if (needsOptions && (!question.options || question.options.length < 2)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "options are required for multiple_choice and select questions",
+      path: ["options"],
+    })
+  }
 })
 
 export const QuestionsPayloadSchema = z.object({
@@ -57,7 +76,7 @@ export const ShortlistCandidateSchema = z.object({
 export const ShortlistPayloadSchema = z.object({
   type: z.literal("connexa.shortlist.v1"),
   run_id: z.string().optional(),
-  candidates: z.array(ShortlistCandidateSchema).max(20),
+  candidates: z.array(ShortlistCandidateSchema).max(100),
 })
 
 export const PricingSignalSchema = z.object({
@@ -123,4 +142,5 @@ export const RerunOverridesSchema = z.object({
   force_clarify: z.boolean().optional(),
   constraints: z.array(z.string().min(1)).optional(),
   geography_region: z.string().min(1).optional(),
+  search_depth: z.enum(["standard", "deep"]).optional(),
 })

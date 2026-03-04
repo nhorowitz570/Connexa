@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 
 import { NextResponse } from "next/server"
 
-import { MODELS } from "@/lib/constants"
+import { MODELS, parseSearchDepth } from "@/lib/constants"
 import { callOpenRouter } from "@/lib/openrouter"
 import { runPipeline } from "@/lib/pipeline/orchestrator"
 import { NormalizedBriefSchema, QuestionsPayloadSchema, RerunOverridesSchema } from "@/lib/schemas"
@@ -15,7 +15,7 @@ type StartInput = {
   overrides?: unknown
 }
 
-export const maxDuration = 60
+export const maxDuration = 300
 
 function parseNumberLike(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value
@@ -176,50 +176,42 @@ function coerceNormalizedBrief(raw: unknown): NormalizedBrief | null {
 }
 
 function fallbackClarifications(brief: NormalizedBrief): QuestionsPayload {
-  const questions: QuestionsPayload["questions"] = []
-
-  questions.push({
-    id: "clarify_constraints",
-    prompt: "Which requirement is most important to enforce?",
-    type: "multiple_choice",
-    options: [
-      "Budget discipline",
-      "Industry specialization",
-      "Timeline speed",
-      "Security/compliance requirements",
-    ],
-    allowOther: true,
-    required: true,
-    helpText: "This drives how providers are filtered and ranked.",
-    fieldPath: "optional.priority_focus",
-  })
-
-  questions.push({
-    id: "clarify_geo",
-    prompt: "What location preference should we prioritize?",
-    type: "multiple_choice",
-    options: [brief.geography.region, "United States", "North America", "Europe", "Global"],
-    allowOther: true,
-    required: false,
-    fieldPath: "geography.region",
-  })
-
-  questions.push({
-    id: "clarify_constraints_list",
-    prompt: "How strict should constraints be for this run?",
-    type: "multiple_choice",
-    options: ["Strict matching only", "Balanced", "Broad search for more options"],
-    allowOther: false,
-    required: false,
-    fieldPath: "optional.constraint_tolerance",
-  })
-
   return {
     type: "connexa.clarifications.v1",
-    questions: questions.map((question) => ({
-      ...question,
-      options: Array.from(new Set(question.options.filter(Boolean))),
-    })),
+    questions: [
+      {
+        id: "priority_focus",
+        prompt: "What is the most important selection criterion?",
+        type: "multiple_choice",
+        options: ["Specialized expertise", "Lower cost", "Faster timeline", "Industry experience"],
+        allowOther: false,
+        required: true,
+        fieldPath: "optional.priority_focus",
+        priority: "high",
+      },
+      {
+        id: "additional_context",
+        prompt: "Any additional context we should factor in?",
+        type: "text",
+        allowOther: false,
+        required: false,
+        fieldPath: "optional.additional_context",
+        priority: "medium",
+        validation: {
+          maxLength: 500,
+        },
+      },
+      {
+        id: "geo_preference",
+        prompt: "Preferred provider geography",
+        type: "select",
+        options: [brief.geography.region, "United States", "North America", "Europe", "Global"],
+        allowOther: false,
+        required: false,
+        fieldPath: "geography.region",
+        priority: "medium",
+      },
+    ],
   }
 }
 
@@ -235,6 +227,12 @@ function withOverrides(normalized: NormalizedBrief, overrides: RerunOverrides | 
     next.geography = {
       ...next.geography,
       region: overrides.geography_region,
+    }
+  }
+  if (typeof overrides.search_depth === "string") {
+    next.optional = {
+      ...next.optional,
+      search_depth: overrides.search_depth,
     }
   }
 
@@ -254,7 +252,7 @@ async function generateClarifications(
       [
         {
           role: "system",
-          content: `Generate up to 3 targeted clarification questions for a B2B sourcing brief.
+          content: `Generate 1-5 targeted clarification questions for a B2B sourcing brief.
 Return ONLY JSON with this schema:
 {
   "type": "connexa.clarifications.v1",
@@ -262,20 +260,28 @@ Return ONLY JSON with this schema:
     {
       "id": "string",
       "prompt": "string",
-      "type": "multiple_choice",
+      "type": "multiple_choice" | "text" | "select" | "number",
       "options": ["option A", "option B"],
       "allowOther": boolean,
       "required": boolean,
       "helpText": "optional string",
-      "fieldPath": "dot.path.into.normalized_brief"
+      "fieldPath": "dot.path.into.normalized_brief",
+      "priority": "high" | "medium" | "low",
+      "validation": {
+        "min": "optional number",
+        "max": "optional number",
+        "minLength": "optional number",
+        "maxLength": "optional number",
+        "pattern": "optional regex string"
+      }
     }
   ]
 }
 Rules:
-- Max 3 questions.
-- Every question type MUST be "multiple_choice".
-- Keep questions short and answerable.
-- Prefer fieldPath values like constraints, geography.region, optional.*`,
+- Max 5 questions.
+- Ask only questions that materially change provider selection.
+- For "multiple_choice" and "select", include at least 2 options.
+- Prefer fieldPath values like constraints, geography.region, timeline.*, optional.*`,
         },
         {
           role: "user",
@@ -283,7 +289,7 @@ Rules:
         },
       ],
       {
-        model: MODELS.CHEAP,
+        model: MODELS.WEAK,
         response_format: { type: "json_object" },
       },
     )
@@ -336,6 +342,8 @@ export async function POST(request: Request) {
     const admin = createAdminClient()
     const normalizedWithOverrides = withOverrides(parsedNormalized, overrides)
     const modeWithOverride = overrides?.mode ?? brief.mode
+    const optional = normalizedWithOverrides.optional as Record<string, unknown>
+    const searchDepth = parseSearchDepth(optional.search_depth)
 
     const { error: briefUpdateError } = await admin
       .from("briefs")
@@ -391,7 +399,7 @@ export async function POST(request: Request) {
       .eq("id", body.brief_id)
     if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
-    void runPipeline(body.brief_id, runId)
+    void runPipeline(body.brief_id, runId, { searchDepth })
 
     return NextResponse.json({ run_id: runId })
   } catch (error) {

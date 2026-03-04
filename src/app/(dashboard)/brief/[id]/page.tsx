@@ -4,6 +4,7 @@ import { AiSummary } from "@/components/brief/ai-summary"
 import { BriefDetailClient } from "@/components/brief/brief-detail-client"
 import { BriefStatusBadge } from "@/components/brief/brief-status-badge"
 import { BriefSummaryCard } from "@/components/brief/brief-summary-card"
+import { ExportDropdown } from "@/components/brief/export-dropdown"
 import { LowConfidenceTips } from "@/components/brief/low-confidence-tips"
 import { RerunButton } from "@/components/pipeline/rerun-button"
 import { ResultCard } from "@/components/results/result-card"
@@ -91,6 +92,7 @@ export default async function BriefDetailPage({
         mode: "simple" | "detailed"
         status: "draft" | "clarifying" | "running" | "complete" | "failed"
         normalized_brief: unknown
+        weights: unknown
       }
     | null
 
@@ -108,6 +110,8 @@ export default async function BriefDetailPage({
     status: "running" | "complete" | "failed"
     confidence_overall: number | null
     notes: unknown
+    search_queries: unknown
+    created_at: string
   }> | null) ?? []
 
   const latestRun = runs[0] ?? null
@@ -162,6 +166,20 @@ export default async function BriefDetailPage({
           : [],
       }
     : null
+  const exportRun = latestRun
+    ? {
+        id: latestRun.id,
+        status: latestRun.status,
+        confidence_overall: latestRun.confidence_overall,
+        notes: Array.isArray(latestRun.notes)
+          ? latestRun.notes.filter((value): value is string => typeof value === "string")
+          : [],
+        search_queries: Array.isArray(latestRun.search_queries)
+          ? latestRun.search_queries.filter((value): value is string => typeof value === "string")
+          : [],
+        created_at: latestRun.created_at,
+      }
+    : null
 
   return (
     <section className="space-y-6">
@@ -173,6 +191,27 @@ export default async function BriefDetailPage({
         <div className="flex items-center gap-2">
           <Badge variant="secondary">{brief.mode}</Badge>
           <BriefStatusBadge status={brief.status} />
+          <ExportDropdown
+            briefId={brief.id}
+            mode={brief.mode}
+            status={brief.status}
+            normalizedBrief={normalizedBrief.success ? normalizedBrief.data : brief.normalized_brief}
+            weights={brief.weights}
+            run={exportRun}
+            results={results.map((result) => ({
+              company_name: result.company_name,
+              website_url: result.website_url,
+              contact_url: result.contact_url,
+              contact_email: result.contact_email,
+              geography: result.geography ?? null,
+              services: result.services,
+              industries: result.industries,
+              score_overall: result.score_overall,
+              score_breakdown: result.score_breakdown,
+              reasoning_summary: result.reasoning_summary,
+              confidence: result.confidence,
+            }))}
+          />
           <RerunButton
             briefId={brief.id}
             mode={brief.mode}

@@ -12,58 +12,110 @@ type ClarifyInput = {
   brief_id?: string
 }
 
-function fallbackClarifications(brief: NormalizedBrief): QuestionsPayload {
-  const questions: QuestionsPayload["questions"] = []
-
-  questions.push({
-    id: "budget_preference",
-    prompt: "Which budget range best matches this project?",
-    type: "multiple_choice",
-    options: ["$5k-$15k", "$15k-$50k", "$50k-$100k", "$100k+"],
-    allowOther: false,
-    required: true,
-    helpText: "Choose your ideal monthly or project budget band.",
-    fieldPath: "optional.budget_preference",
-  })
-
-  questions.push({
-    id: "timeline",
-    prompt: "What implementation timeline should we optimize for?",
-    type: "multiple_choice",
-    options: ["2-4 weeks", "1-3 months", "3-6 months", "6+ months"],
-    allowOther: true,
-    required: true,
-    fieldPath: "timeline.duration",
-  })
-
-  questions.push({
-    id: "geo_scope",
-    prompt: "What provider location preference should we apply?",
-    type: "multiple_choice",
-    options: [brief.geography.region, "United States", "North America", "Europe", "Global"],
-    allowOther: true,
-    required: false,
-    fieldPath: "geography.region",
-  })
-
-  questions.push({
-    id: "priority_focus",
-    prompt: "Which selection priority matters most right now?",
-    type: "multiple_choice",
-    options: ["Specialized expertise", "Lower cost", "Faster timeline", "Industry experience"],
-    allowOther: true,
-    required: false,
-    fieldPath: "optional.priority_focus",
-  })
-
-  const dedupedQuestions = questions.map((question) => ({
-    ...question,
-    options: Array.from(new Set(question.options.filter(Boolean))),
-  }))
-
+function fallbackClarifications(): QuestionsPayload {
   return {
     type: "connexa.clarifications.v1",
-    questions: dedupedQuestions.slice(0, 3),
+    questions: [
+      {
+        id: "priority_focus",
+        prompt: "What is the most important selection criterion?",
+        type: "multiple_choice",
+        options: ["Specialized expertise", "Lower cost", "Faster timeline", "Industry experience"],
+        allowOther: false,
+        required: true,
+        helpText: "We will bias rankings toward this priority.",
+        fieldPath: "optional.priority_focus",
+        priority: "high",
+      },
+      {
+        id: "additional_context",
+        prompt: "Any additional context we should factor in?",
+        type: "text",
+        allowOther: false,
+        required: false,
+        helpText: "Optional details like preferred tools, team size, or compliance constraints.",
+        fieldPath: "optional.additional_context",
+        priority: "medium",
+        validation: {
+          maxLength: 500,
+        },
+      },
+    ],
+  }
+}
+
+function normalizeQuestionPayload(payload: QuestionsPayload): QuestionsPayload {
+  return {
+    type: payload.type,
+    questions: payload.questions.slice(0, 5).map((question) => ({
+      ...question,
+      priority: question.priority ?? "medium",
+      type: question.type ?? "multiple_choice",
+    })),
+  }
+}
+
+async function generateClarificationsWithModel(
+  normalized: NormalizedBrief,
+  confidence: number,
+): Promise<QuestionsPayload> {
+  if (!process.env.OPENROUTER_API_KEY) {
+    return fallbackClarifications()
+  }
+
+  try {
+    const response = await callOpenRouter(
+      [
+        {
+          role: "system",
+          content: `You generate dynamic clarification questions for B2B sourcing briefs.
+Return ONLY valid JSON matching:
+{
+  "type": "connexa.clarifications.v1",
+  "questions": [
+    {
+      "id": "string",
+      "prompt": "string",
+      "type": "multiple_choice" | "text" | "select" | "number",
+      "options": ["string"], 
+      "allowOther": boolean,
+      "required": boolean,
+      "helpText": "optional string",
+      "fieldPath": "dot.path",
+      "priority": "high" | "medium" | "low",
+      "validation": {
+        "min": "optional number",
+        "max": "optional number",
+        "minLength": "optional number",
+        "maxLength": "optional number",
+        "pattern": "optional regex string"
+      }
+    }
+  ]
+}
+Rules:
+- Generate 1-5 questions only.
+- Only ask questions that materially change provider search/ranking outcomes.
+- Do not ask for data already clearly specified in the brief.
+- Use "high" priority for blockers, "medium" for meaningful refinements, "low" for nice-to-have.
+- For "multiple_choice" and "select", include at least 2 options.
+- Use fieldPath values that map into normalized brief structure (timeline.*, geography.*, constraints, optional.*).`,
+        },
+        {
+          role: "user",
+          content: `Confidence score: ${confidence}\nNormalized brief:\n${JSON.stringify(normalized)}`,
+        },
+      ],
+      {
+        model: MODELS.WEAK,
+        response_format: { type: "json_object" },
+      },
+    )
+
+    const parsed = QuestionsPayloadSchema.parse(JSON.parse(response))
+    return normalizeQuestionPayload(parsed)
+  } catch {
+    return fallbackClarifications()
   }
 }
 
@@ -87,7 +139,7 @@ export async function POST(request: Request) {
 
     const { data: brief, error: briefError } = await supabase
       .from("briefs")
-      .select("id")
+      .select("id, updated_at")
       .eq("id", body.brief_id)
       .eq("user_id", user.id)
       .single()
@@ -96,53 +148,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Brief not found." }, { status: 404 })
     }
 
-    let payload = fallbackClarifications(normalized)
-    if (process.env.OPENROUTER_API_KEY) {
-      try {
-        const response = await callOpenRouter(
-          [
-            {
-              role: "system",
-              content: `Generate 1-3 targeted clarification questions for a B2B sourcing brief.
-Return ONLY JSON with this exact schema:
-{
-  "type": "connexa.clarifications.v1",
-  "questions": [
-    {
-      "id": "string",
-      "prompt": "string",
-      "type": "multiple_choice",
-      "options": ["option A", "option B"],
-      "allowOther": boolean,
-      "required": boolean,
-      "helpText": "optional string",
-      "fieldPath": "dot.path.into.normalized_brief"
-    }
-  ]
-}
-Rules:
-- Every question type MUST be "multiple_choice".
-- Each options array MUST include at least 2 distinct options.
-- Prefer fieldPath values that write to timeline.duration, geography.region, optional.*, or similar scalar paths.
-- Keep questions concise and action-oriented.
-- Ask questions when confidence < 0.85 or when constraints are empty, budget is very wide, or geography is global.`,
-            },
-            {
-              role: "user",
-              content: `Confidence: ${body.confidence}\nBrief: ${JSON.stringify(normalized)}`,
-            },
-          ],
-          {
-            model: MODELS.CHEAP,
-            response_format: { type: "json_object" },
-          },
-        )
+    const { data: cachedRow } = await supabase
+      .from("brief_questions")
+      .select("questions, created_at")
+      .eq("brief_id", body.brief_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-        payload = QuestionsPayloadSchema.parse(JSON.parse(response))
-      } catch {
-        // Keep fallback payload.
+    const briefUpdatedAt = new Date(brief.updated_at).getTime()
+    const cachedCreatedAt =
+      cachedRow?.created_at && typeof cachedRow.created_at === "string"
+        ? new Date(cachedRow.created_at).getTime()
+        : 0
+
+    if (cachedRow && cachedCreatedAt >= briefUpdatedAt) {
+      const cachedPayload = QuestionsPayloadSchema.safeParse(cachedRow.questions)
+      if (cachedPayload.success) {
+        await supabase.from("briefs").update({ status: "clarifying" }).eq("id", body.brief_id)
+        return NextResponse.json(normalizeQuestionPayload(cachedPayload.data))
       }
     }
+
+    const payload = await generateClarificationsWithModel(normalized, body.confidence)
 
     const { error: insertError } = await supabase.from("brief_questions").insert({
       brief_id: body.brief_id,
