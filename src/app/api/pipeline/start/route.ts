@@ -27,7 +27,7 @@ type ClarificationGenerationResult = {
   error?: string
 }
 
-export const maxDuration = 300
+export const maxDuration = 3600
 
 function withOverrides(normalized: NormalizedBrief, overrides: RerunOverrides | null): NormalizedBrief {
   if (!overrides) return normalized

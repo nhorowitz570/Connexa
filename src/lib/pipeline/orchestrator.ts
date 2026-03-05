@@ -112,7 +112,11 @@ export async function runPipeline(
     await updateRun({ notesOnly: notes })
   }
 
-  const markBatchStep = async (step: "search" | "evidence", batchNumber: number, totalBatches: number) => {
+  const markBatchStep = async (
+    step: "search" | "evidence" | "extract",
+    batchNumber: number,
+    totalBatches: number,
+  ) => {
     appendNote(`step:${step}:batch:${batchNumber}/${totalBatches}`)
     await updateRun({ notesOnly: notes })
   }
@@ -158,12 +162,13 @@ export async function runPipeline(
     const weights = BriefWeightsSchema.parse(brief.weights)
     const mode = brief.mode as BriefMode
     const timeoutMs = getPipelineTimeoutMs(searchDepth)
+    const longStepTimeoutCap = searchDepth === "deep" ? 1_800_000 : 600_000
     const stepTimeouts = {
       query_plan: Math.min(90_000, Math.max(12_000, Math.floor(timeoutMs * 0.25))),
       search: Math.min(300_000, Math.max(25_000, Math.floor(timeoutMs * 0.45))),
       triage: Math.min(60_000, Math.max(8_000, Math.floor(timeoutMs * 0.15))),
-      evidence: Math.min(600_000, Math.max(35_000, Math.floor(timeoutMs * 0.5))),
-      extract: Math.min(600_000, Math.max(20_000, Math.floor(timeoutMs * 0.45))),
+      evidence: Math.min(longStepTimeoutCap, Math.max(35_000, Math.floor(timeoutMs * 0.5))),
+      extract: Math.min(longStepTimeoutCap, Math.max(20_000, Math.floor(timeoutMs * 0.45))),
       score: Math.min(300_000, Math.max(20_000, Math.floor(timeoutMs * 0.35))),
       rank: Math.min(40_000, Math.max(5_000, Math.floor(timeoutMs * 0.1))),
     } as const
@@ -231,7 +236,11 @@ export async function runPipeline(
     }
 
     const candidates = await withStepTimeout("extract", stepTimeouts.extract, () =>
-      extractCandidates(evidence, normalized),
+      extractCandidates(evidence, normalized, {
+        mode,
+        onBatchProgress: (batchNumber, totalBatches) =>
+          markBatchStep("extract", batchNumber, totalBatches),
+      }),
     )
     await markStep("extract")
     appendNote(`Extracted ${candidates.length} candidate profiles.`)
