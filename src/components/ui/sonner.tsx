@@ -11,9 +11,12 @@ import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 const Toaster = ({ ...props }: ToasterProps) => {
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme !== "light"
+
   return (
     <Sonner
-      theme="dark"
+      theme={isDark ? "dark" : "light"}
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,
@@ -24,9 +27,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "#0D0D0D",
-          "--normal-text": "#ffffff",
-          "--normal-border": "#1F1F1F",
+          "--normal-bg": isDark ? "#0D0D0D" : "#ffffff",
+          "--normal-text": isDark ? "#ffffff" : "#0f172a",
+          "--normal-border": isDark ? "#1F1F1F" : "#dbe1f0",
           "--border-radius": "var(--radius)",
         } as React.CSSProperties
       }

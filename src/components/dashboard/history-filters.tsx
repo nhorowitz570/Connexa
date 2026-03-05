@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 type HistoryFiltersProps = {
   mode: "all" | "simple" | "detailed"
-  status: "all" | "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
+  status: "all" | "draft" | "clarifying" | "running" | "complete" | "error" | "cancelled"
   query: string
 }
 
@@ -82,7 +82,7 @@ export function HistoryFilters({ mode, status, query }: HistoryFiltersProps) {
           <SelectItem value="all">All Statuses</SelectItem>
           <SelectItem value="complete">Complete</SelectItem>
           <SelectItem value="running">Running</SelectItem>
-          <SelectItem value="failed">Failed</SelectItem>
+          <SelectItem value="error">Error</SelectItem>
           <SelectItem value="cancelled">Cancelled</SelectItem>
           <SelectItem value="draft">Draft</SelectItem>
           <SelectItem value="clarifying">Clarifying</SelectItem>

@@ -21,7 +21,7 @@ type ExportBriefDropdownProps = {
   weights: unknown
   run: {
     id: string
-    status: "running" | "complete" | "failed" | "cancelled"
+    status: "running" | "complete" | "error" | "cancelled"
     confidence_overall: number | null
     notes: string[]
     search_queries?: string[]

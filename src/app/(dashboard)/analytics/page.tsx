@@ -16,6 +16,15 @@ type Recommendation = {
   priority: "low" | "medium" | "high"
 }
 
+const FRIENDLY_MISS_REASON_LABELS: Record<string, string> = {
+  low_confidence: "Brief needs more detail",
+  few_results: "Limited provider coverage",
+  low_scores: "Low match quality",
+  missing_budget: "Budget unclear",
+  vague_scope: "Scope too broad",
+  no_evidence: "Insufficient data found",
+}
+
 function normalizeRecommendations(value: unknown): Recommendation[] {
   if (!Array.isArray(value)) return []
   return value
@@ -71,7 +80,7 @@ export default async function AnalyticsPage() {
       .from("briefs")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
-      .eq("status", "failed"),
+      .eq("status", "error"),
     supabase
       .from("briefs")
       .select("id", { count: "exact", head: true })
@@ -86,11 +95,11 @@ export default async function AnalyticsPage() {
       <section className="flex flex-col gap-6 animate-in fade-in duration-500">
         <div>
           <h1 className="text-2xl font-semibold text-white">AI Actionable Core Insights</h1>
-          <p className="text-sm text-[#919191] mt-1">Run briefs and compute analytics to populate this page.</p>
+          <p className="mt-1 text-sm text-[#919191]">Run a few searches to unlock this dashboard.</p>
         </div>
         <Card>
           <CardContent className="space-y-3 pt-6 text-sm text-[#919191]">
-            <p>No analytics data yet. Submit briefs and run the analytics computation.</p>
+             <p>No analytics data yet. Start a search, then refresh analytics.</p>
             <AnalyticsRefreshButton />
           </CardContent>
         </Card>
@@ -123,8 +132,8 @@ export default async function AnalyticsPage() {
   const BAR_COLORS = ["#EF4444", "#F59E0B", "#8B5CF6", "#3B82F6", "#10B981", "#EC4899", "#6366f1", "#14B8A6"]
   const missReasonData = Array.from(missReasonTotals.entries())
     .sort((a, b) => b[1] - a[1])
-    .map(([reason, count], i) => ({
-      reason,
+      .map(([reason, count], i) => ({
+      reason: FRIENDLY_MISS_REASON_LABELS[reason] ?? reason.replaceAll("_", " "),
       count,
       color: BAR_COLORS[i % BAR_COLORS.length],
     }))
@@ -167,11 +176,11 @@ export default async function AnalyticsPage() {
       color: "#3B82F6",
     },
     {
-      label: "Missed Opportunities",
+      label: "Improvement Areas",
       value: String(missedOpportunities),
       change: `${failedBriefs ?? 0} failed`,
       trend: "down" as const,
-      description: "Briefs with fewer than 3 viable results",
+      description: "Searches that likely need a stronger brief",
       color: "#F59E0B",
     },
   ]

@@ -30,7 +30,7 @@ export function ConnexaLogo({ className }: { className?: string }) {
                     </linearGradient>
                 </defs>
             </svg>
-            <span className="text-xl font-semibold tracking-tight text-white">
+            <span className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white">
                 Connexa<span className="text-indigo-400">AI</span>
             </span>
         </div>

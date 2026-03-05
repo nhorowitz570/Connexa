@@ -1,7 +1,7 @@
 "use client"
 
 import { Menu } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { ChatInput } from "@/components/assistant/chat-input"
@@ -20,6 +20,8 @@ type ThreadsResponse = {
   }
   error?: string
 }
+
+const NEW_CHAT_COOLDOWN_MS = 5000
 
 function normalizeMessage(input: Record<string, unknown>): ChatMessageType {
   return {
@@ -45,10 +47,13 @@ export function ChatView() {
   const [messages, setMessages] = useState<ChatMessageType[]>([])
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [newThreadCooldown, setNewThreadCooldown] = useState(false)
   const [mobileThreadsOpen, setMobileThreadsOpen] = useState(false)
   const scrollViewportRef = useRef<HTMLDivElement | null>(null)
   const shouldAutoScrollRef = useRef(true)
   const forceScrollRef = useRef(false)
+  const hasMessagesRef = useRef(false)
+  const newThreadCooldownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? null,
@@ -64,8 +69,9 @@ export function ChatView() {
     })
   }
 
-  const loadThreadData = async (threadId?: string | null) => {
-    setLoading(true)
+  const loadThreadData = useCallback(async (threadId?: string | null) => {
+    if (!hasMessagesRef.current) setLoading(true)
+
     try {
       const url = threadId ? `/api/assistant/threads?thread_id=${threadId}` : "/api/assistant/threads"
       const response = await fetch(url)
@@ -85,11 +91,34 @@ export function ChatView() {
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  const refreshThreadData = async (threadId: string) => {
+    try {
+      const url = `/api/assistant/threads?thread_id=${threadId}`
+      const response = await fetch(url)
+      const payload = (await response.json()) as ThreadsResponse
+
+      if (!response.ok || !payload.data) return
+
+      setThreads(payload.data.threads)
+      if (payload.data.messages.length > 0) {
+        setMessages(payload.data.messages.map((message) => normalizeMessage(message as Record<string, unknown>)))
+        shouldAutoScrollRef.current = true
+      }
+      setActiveThreadId(payload.data.active_thread_id)
+    } catch {
+      // Background sync should not interrupt the active conversation.
+    }
   }
 
   useEffect(() => {
+    hasMessagesRef.current = messages.length > 0
+  }, [messages.length])
+
+  useEffect(() => {
     void loadThreadData()
-  }, [])
+  }, [loadThreadData])
 
   useEffect(() => {
     if (forceScrollRef.current || shouldAutoScrollRef.current) {
@@ -102,6 +131,14 @@ export function ChatView() {
     shouldAutoScrollRef.current = true
     scrollToBottom("auto")
   }, [activeThreadId])
+
+  useEffect(() => {
+    return () => {
+      if (newThreadCooldownTimeoutRef.current) {
+        clearTimeout(newThreadCooldownTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const createThread = async () => {
     const response = await fetch("/api/assistant/threads", {
@@ -148,6 +185,31 @@ export function ChatView() {
       toast.error(message)
       throw error
     }
+  }
+
+  const handleNewThread = (closeMobileSheet = false) => {
+    if (newThreadCooldown) return
+
+    setNewThreadCooldown(true)
+    if (newThreadCooldownTimeoutRef.current) {
+      clearTimeout(newThreadCooldownTimeoutRef.current)
+    }
+    newThreadCooldownTimeoutRef.current = setTimeout(() => {
+      setNewThreadCooldown(false)
+      newThreadCooldownTimeoutRef.current = null
+    }, NEW_CHAT_COOLDOWN_MS)
+
+    void createThread()
+      .then((thread) => {
+        if (closeMobileSheet) {
+          setMobileThreadsOpen(false)
+        }
+        return loadThreadData(thread.id)
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Failed to create thread."
+        toast.error(message)
+      })
   }
 
   const sendMessage = async (message: string, attachments: ChatAttachment[], briefRefs: string[]) => {
@@ -235,7 +297,7 @@ export function ChatView() {
         }
       }
 
-      await loadThreadData(threadId)
+      await refreshThreadData(threadId)
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "Failed to send message."
       toast.error(messageText)
@@ -248,7 +310,7 @@ export function ChatView() {
   }
 
   return (
-    <div className="flex h-full overflow-hidden rounded-2xl border border-[#1F1F1F] bg-[#0D0D0D]">
+    <div className="glass-card flex h-full overflow-hidden rounded-3xl border border-white/10 bg-[#0b1019]/75">
       <div className="hidden w-72 md:block">
         <ThreadList
           threads={threads}
@@ -256,26 +318,22 @@ export function ChatView() {
           onSelect={(threadId) => {
             void loadThreadData(threadId)
           }}
-          onNewThread={() => {
-            void createThread().then((thread) => loadThreadData(thread.id)).catch((error: unknown) => {
-              const message = error instanceof Error ? error.message : "Failed to create thread."
-              toast.error(message)
-            })
-          }}
+          onNewThread={() => handleNewThread(false)}
           onDelete={deleteThread}
+          newThreadDisabled={newThreadCooldown}
         />
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-[#1F1F1F] px-3 py-2">
+        <div className="glass-card flex items-center justify-between border-b border-white/10 px-3 py-2">
           <div className="flex items-center gap-2">
             <Sheet open={mobileThreadsOpen} onOpenChange={setMobileThreadsOpen}>
               <SheetTrigger asChild>
-                <Button variant="outline" size="icon" className="md:hidden">
+                <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl border-white/15 bg-white/5 md:hidden">
                   <Menu className="h-4 w-4" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="p-0">
+              <SheetContent side="left" className="border-r border-white/10 bg-[#0b1019]/95 p-0">
                 <ThreadList
                   threads={threads}
                   activeThreadId={activeThreadId}
@@ -283,25 +341,18 @@ export function ChatView() {
                     setMobileThreadsOpen(false)
                     void loadThreadData(threadId)
                   }}
-                  onNewThread={() => {
-                    void createThread().then((thread) => {
-                      setMobileThreadsOpen(false)
-                      return loadThreadData(thread.id)
-                    }).catch((error: unknown) => {
-                      const message = error instanceof Error ? error.message : "Failed to create thread."
-                      toast.error(message)
-                    })
-                  }}
+                  onNewThread={() => handleNewThread(true)}
                   onDelete={async (threadId) => {
                     await deleteThread(threadId)
                     setMobileThreadsOpen(false)
                   }}
+                  newThreadDisabled={newThreadCooldown}
                 />
               </SheetContent>
             </Sheet>
             <div>
               <p className="text-sm font-semibold">{activeThread?.title ?? "Assistant"}</p>
-              <p className="text-xs text-[#919191]">Context-aware help across briefs and results</p>
+              <p className="text-xs text-[#919191]">Ask questions about briefs, matches, and strategy</p>
             </div>
           </div>
           <ExportThreadDropdown thread={activeThread} messages={messages} />
@@ -314,7 +365,7 @@ export function ChatView() {
             shouldAutoScrollRef.current = isNearBottom(event.currentTarget)
           }}
         >
-          <div className="space-y-3 p-3">
+          <div className="space-y-3 p-3 sm:p-4">
             {loading ? (
               <p className="text-sm text-[#919191]">Loading messages...</p>
             ) : messages.length === 0 ? (

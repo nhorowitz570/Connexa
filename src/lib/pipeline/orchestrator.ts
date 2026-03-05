@@ -2,20 +2,22 @@ import {
   CONFIDENCE,
   MISS_REASONS,
   getPipelineLimits,
+  getPipelineTimeoutMs,
   parseSearchDepth,
   type PipelineLimits,
   type SearchDepth,
 } from "@/lib/constants"
-import { BriefWeightsSchema, NormalizedBriefSchema } from "@/lib/schemas"
+import { coerceNormalizedBrief } from "@/lib/brief-coerce"
+import { BriefWeightsSchema } from "@/lib/schemas"
 import { exaSearch } from "@/lib/pipeline/exa"
 import { extractCandidates } from "@/lib/pipeline/extract"
-import { firecrawlScrape } from "@/lib/pipeline/firecrawl"
+import { alterlabScrape } from "@/lib/pipeline/alterlab"
 import { generateQueryPlan } from "@/lib/pipeline/query-plan"
 import { rankAndSelect } from "@/lib/pipeline/rank"
 import { scoreCandidates } from "@/lib/pipeline/score"
 import { triageCandidates } from "@/lib/pipeline/triage"
 import { createAdminClient } from "@/lib/supabase/admin"
-import type { BriefMode, NormalizedBrief, ShortlistPayload } from "@/types"
+import type { BriefMode, ShortlistPayload } from "@/types"
 
 type PipelineStep =
   | "normalize"
@@ -45,99 +47,25 @@ function isLikelyVagueScope(serviceType: string): boolean {
   )
 }
 
-function parseNumberLike(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value
-  if (typeof value !== "string") return null
-  const cleaned = value.trim().toLowerCase()
-  if (!cleaned) return null
+async function withStepTimeout<T>(
+  step: PipelineStep,
+  timeoutMs: number,
+  execute: () => Promise<T>,
+): Promise<T> {
+  let timer: NodeJS.Timeout | null = null
 
-  const suffixMatch = cleaned.match(/^([0-9,.]+)\s*([km])$/)
-  if (suffixMatch) {
-    const base = Number(suffixMatch[1].replaceAll(",", ""))
-    if (!Number.isFinite(base)) return null
-    const multiplier = suffixMatch[2] === "m" ? 1_000_000 : 1_000
-    return base * multiplier
+  try {
+    return await Promise.race([
+      execute(),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`Step '${step}' timed out after ${timeoutMs}ms`))
+        }, timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
   }
-
-  const numeric = Number(cleaned.replace(/[^0-9.]/g, ""))
-  return Number.isFinite(numeric) ? numeric : null
-}
-
-function parseStringList(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .filter((entry): entry is string => typeof entry === "string")
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-  }
-  if (typeof value === "string") {
-    return value
-      .split(/[\n,;|]/)
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-  }
-  return []
-}
-
-function coerceNormalizedBrief(raw: unknown): NormalizedBrief {
-  const direct = NormalizedBriefSchema.safeParse(raw)
-  if (direct.success) return direct.data
-
-  const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}
-  const objectLike = source as Record<string, unknown>
-  const budgetRaw = objectLike.budget_range
-  const min =
-    budgetRaw && typeof budgetRaw === "object" && !Array.isArray(budgetRaw)
-      ? parseNumberLike((budgetRaw as { min?: unknown }).min) ?? 10000
-      : parseNumberLike(budgetRaw) ?? 10000
-  const max =
-    budgetRaw && typeof budgetRaw === "object" && !Array.isArray(budgetRaw)
-      ? parseNumberLike((budgetRaw as { max?: unknown }).max) ?? Math.max(min, 100000)
-      : Math.max(min, (parseNumberLike(budgetRaw) ?? min) * 5)
-  const currency =
-    budgetRaw && typeof budgetRaw === "object" && !Array.isArray(budgetRaw)
-      ? typeof (budgetRaw as { currency?: unknown }).currency === "string"
-        ? ((budgetRaw as { currency?: string }).currency ?? "USD")
-        : "USD"
-      : "USD"
-
-  const fallback = {
-    service_type:
-      typeof objectLike.service_type === "string" && objectLike.service_type.trim().length > 0
-        ? objectLike.service_type.trim()
-        : "b2b service provider",
-    budget_range: {
-      min: Math.max(0, min),
-      max: Math.max(min, max),
-      currency,
-    },
-    timeline:
-      objectLike.timeline && typeof objectLike.timeline === "object" && !Array.isArray(objectLike.timeline)
-        ? objectLike.timeline
-        : { type: "duration", duration: typeof objectLike.timeline === "string" ? objectLike.timeline : "3 months" },
-    industry: parseStringList(objectLike.industry),
-    geography:
-      objectLike.geography && typeof objectLike.geography === "object" && !Array.isArray(objectLike.geography)
-        ? objectLike.geography
-        : {
-            region:
-              typeof objectLike.geography === "string" && objectLike.geography.trim().length > 0
-                ? objectLike.geography
-                : "Global",
-            remote_ok: true,
-          },
-    constraints: parseStringList(objectLike.constraints),
-    optional:
-      objectLike.optional && typeof objectLike.optional === "object" && !Array.isArray(objectLike.optional)
-        ? objectLike.optional
-        : {},
-  }
-
-  if (fallback.industry.length === 0) {
-    fallback.industry = ["general b2b"]
-  }
-
-  return NormalizedBriefSchema.parse(fallback)
 }
 
 export async function runPipeline(
@@ -150,7 +78,7 @@ export async function runPipeline(
   const startedAtMs = Date.now()
 
   const updateRun = async (payload: {
-    status?: "running" | "complete" | "failed" | "cancelled"
+    status?: "running" | "complete" | "error" | "cancelled"
     confidence_overall?: number
     search_queries?: string[]
     shortlist?: ShortlistPayload
@@ -221,12 +149,24 @@ export async function runPipeline(
     }
 
     const normalized = coerceNormalizedBrief(brief.normalized_brief)
+    if (!normalized) {
+      throw new Error("Normalized brief is missing or invalid")
+    }
     const optional = normalized.optional as Record<string, unknown>
     const searchDepth = options.searchDepth ?? parseSearchDepth(optional.search_depth)
     const limits = getPipelineLimits(searchDepth)
     const weights = BriefWeightsSchema.parse(brief.weights)
     const mode = brief.mode as BriefMode
-    const timeoutMs = searchDepth === "deep" ? 5 * 60 * 1000 : 90 * 1000
+    const timeoutMs = getPipelineTimeoutMs(searchDepth)
+    const stepTimeouts = {
+      query_plan: Math.min(90_000, Math.max(12_000, Math.floor(timeoutMs * 0.25))),
+      search: Math.min(300_000, Math.max(25_000, Math.floor(timeoutMs * 0.45))),
+      triage: Math.min(60_000, Math.max(8_000, Math.floor(timeoutMs * 0.15))),
+      evidence: Math.min(600_000, Math.max(35_000, Math.floor(timeoutMs * 0.5))),
+      extract: Math.min(600_000, Math.max(20_000, Math.floor(timeoutMs * 0.45))),
+      score: Math.min(300_000, Math.max(20_000, Math.floor(timeoutMs * 0.35))),
+      rank: Math.min(40_000, Math.max(5_000, Math.floor(timeoutMs * 0.1))),
+    } as const
 
     const hasTimedOut = () => Date.now() - startedAtMs > timeoutMs
 
@@ -235,30 +175,36 @@ export async function runPipeline(
     await updateRun({ notesOnly: notes })
     if (await stopIfCancelled()) return
 
-    const queries = await generateQueryPlan(normalized, {
-      maxQueries: limits.MAX_SEARCH_QUERIES,
-      searchDepth,
-    })
+    const queries = await withStepTimeout("query_plan", stepTimeouts.query_plan, () =>
+      generateQueryPlan(normalized, {
+        maxQueries: limits.MAX_SEARCH_QUERIES,
+        searchDepth,
+      }),
+    )
     await markStep("query_plan")
     await updateRun({ search_queries: queries })
     appendNote(`Planned ${queries.length} queries.`)
     await updateRun({ notesOnly: notes })
     if (await stopIfCancelled()) return
 
-    const raw = await exaSearch(queries, {
-      limits,
-      searchDepth,
-      onBatchProgress: (batchNumber, totalBatches) =>
-        markBatchStep("search", batchNumber, totalBatches),
-    })
+    const raw = await withStepTimeout("search", stepTimeouts.search, () =>
+      exaSearch(queries, {
+        limits,
+        searchDepth,
+        onBatchProgress: (batchNumber, totalBatches) =>
+          markBatchStep("search", batchNumber, totalBatches),
+      }),
+    )
     await markStep("search")
     appendNote(`Collected ${raw.length} raw search results.`)
     await updateRun({ notesOnly: notes })
     if (await stopIfCancelled()) return
 
-    const shortlist = await triageCandidates(raw, normalized, {
-      maxCandidates: limits.MAX_SHORTLIST_CANDIDATES,
-    })
+    const shortlist = await withStepTimeout("triage", stepTimeouts.triage, () =>
+      triageCandidates(raw, normalized, {
+        maxCandidates: limits.MAX_SHORTLIST_CANDIDATES,
+      }),
+    )
     await markStep("triage")
     await updateRun({ shortlist })
     appendNote(`Shortlisted ${shortlist.candidates.length} candidate domains.`)
@@ -266,12 +212,14 @@ export async function runPipeline(
     if (await stopIfCancelled()) return
 
     const evidenceUrls = collectShortlistUrls(shortlist, limits)
-    const evidence = await firecrawlScrape(evidenceUrls, {
-      limits,
-      searchDepth,
-      onBatchProgress: (batchNumber, totalBatches) =>
-        markBatchStep("evidence", batchNumber, totalBatches),
-    })
+    const evidence = await withStepTimeout("evidence", stepTimeouts.evidence, () =>
+      alterlabScrape(evidenceUrls, {
+        limits,
+        searchDepth,
+        onBatchProgress: (batchNumber, totalBatches) =>
+          markBatchStep("evidence", batchNumber, totalBatches),
+      }),
+    )
     await markStep("evidence")
     appendNote(`Fetched evidence from ${evidence.length} pages.`)
     await updateRun({ notesOnly: notes })
@@ -282,19 +230,25 @@ export async function runPipeline(
       await updateRun({ notesOnly: notes })
     }
 
-    const candidates = await extractCandidates(evidence, normalized)
+    const candidates = await withStepTimeout("extract", stepTimeouts.extract, () =>
+      extractCandidates(evidence, normalized),
+    )
     await markStep("extract")
     appendNote(`Extracted ${candidates.length} candidate profiles.`)
     await updateRun({ notesOnly: notes })
     if (await stopIfCancelled()) return
 
-    const scored = await scoreCandidates(candidates, normalized, weights, mode)
+    const scored = await withStepTimeout("score", stepTimeouts.score, () =>
+      scoreCandidates(candidates, normalized, weights, mode),
+    )
     await markStep("score")
     appendNote(`Scored ${scored.length} candidates.`)
     await updateRun({ notesOnly: notes })
     if (await stopIfCancelled()) return
 
-    const topResults = rankAndSelect(scored, limits.TOP_RESULTS)
+    const topResults = await withStepTimeout("rank", stepTimeouts.rank, async () =>
+      rankAndSelect(scored, limits.TOP_RESULTS),
+    )
     await markStep("rank")
     if (await stopIfCancelled()) return
 
@@ -342,11 +296,11 @@ export async function runPipeline(
       appendNote(`miss:${MISS_REASONS.VAGUE_SCOPE}`)
     }
     if (evidence.length === 0) {
-      appendNote("No extractable evidence pages were returned from Firecrawl.")
+      appendNote("No extractable evidence pages were returned from AlterLab.")
       appendNote(`miss:${MISS_REASONS.NO_EVIDENCE}`)
     }
 
-    const finalStatus = confidenceOverall < CONFIDENCE.MIN_FOR_SUCCESS ? "failed" : "complete"
+    const finalStatus = confidenceOverall < CONFIDENCE.MIN_FOR_SUCCESS ? "error" : "complete"
     const durationSeconds = Math.round((Date.now() - startedAtMs) / 1000)
     appendNote(`Pipeline duration: ${durationSeconds}s`)
     const completedAt = new Date().toISOString()
@@ -370,10 +324,10 @@ export async function runPipeline(
     const completedAt = new Date().toISOString()
 
     await updateRun({
-      status: "failed",
+      status: "error",
       notesOnly: notes,
       completed_at: completedAt,
     })
-    await admin.from("briefs").update({ status: "failed" }).eq("id", briefId)
+    await admin.from("briefs").update({ status: "error" }).eq("id", briefId)
   }
 }

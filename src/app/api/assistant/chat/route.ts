@@ -51,8 +51,32 @@ function sanitizeAssistantTitle(message: string): string {
   return cleaned.slice(0, 60)
 }
 
+function truncate(value: string, limit: number): string {
+  if (value.length <= limit) return value
+  return `${value.slice(0, Math.max(0, limit - 1))}...`
+}
+
+function inferBriefRefsFromReply(
+  reply: string,
+  briefCandidates: Array<{ id: string; name: string | null }>,
+): string[] {
+  const lowerReply = reply.toLowerCase()
+  const matched: string[] = []
+
+  for (const brief of briefCandidates) {
+    const name = brief.name?.trim()
+    if (!name || name.length < 3) continue
+    if (lowerReply.includes(name.toLowerCase())) {
+      matched.push(brief.id)
+    }
+  }
+
+  return [...new Set(matched)].slice(0, 6)
+}
+
 export async function POST(request: Request) {
   try {
+    const startTime = Date.now()
     const body = (await request.json().catch(() => ({}))) as ChatInput
     if (!body.thread_id || !body.message || body.message.trim().length === 0) {
       return NextResponse.json({ error: "thread_id and message are required." }, { status: 400 })
@@ -105,7 +129,13 @@ export async function POST(request: Request) {
         .eq("id", thread.id)
     }
 
-    const [{ data: profile }, { data: historyRaw }, { data: briefRowsRaw }, { data: analyticsRaw }] =
+    const [
+      { data: profile },
+      { data: historyRaw },
+      { data: referencedBriefsRaw },
+      { data: recentBriefsRaw },
+      { data: analyticsRaw },
+    ] =
       await Promise.all([
         supabase.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle(),
         supabase
@@ -117,10 +147,16 @@ export async function POST(request: Request) {
         briefRefs.length > 0
           ? supabase
             .from("briefs")
-            .select("id, status, normalized_brief, weights")
+            .select("id, name, status, raw_prompt, normalized_brief, weights, created_at, category")
             .eq("user_id", user.id)
             .in("id", briefRefs)
           : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+        supabase
+          .from("briefs")
+          .select("id, name, status, raw_prompt, normalized_brief, category, created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(10),
         supabase
           .from("analytics_daily")
           .select("date, total_briefs, completed_briefs, failed_briefs, avg_score, avg_confidence, miss_reasons")
@@ -130,11 +166,25 @@ export async function POST(request: Request) {
           .maybeSingle(),
       ])
 
-    const briefRows = (briefRowsRaw ?? []) as Array<{
+    const briefRows = (referencedBriefsRaw ?? []) as Array<{
       id: string
+      name: string | null
       status: string
+      raw_prompt: string | null
       normalized_brief: unknown
       weights: unknown
+      created_at: string
+      category: string | null
+    }>
+
+    const recentBriefRows = (recentBriefsRaw ?? []) as Array<{
+      id: string
+      name: string | null
+      status: string
+      raw_prompt: string | null
+      normalized_brief: unknown
+      category: string | null
+      created_at: string
     }>
 
     const referencedBriefIds = briefRows.map((row) => row.id)
@@ -166,11 +216,41 @@ export async function POST(request: Request) {
 
     const briefContext = briefRows.map((brief) => ({
       id: brief.id,
+      name: brief.name,
       status: brief.status,
+      category: brief.category,
+      created_at: brief.created_at,
+      raw_prompt:
+        typeof brief.raw_prompt === "string" && brief.raw_prompt.trim().length > 0
+          ? truncate(brief.raw_prompt, 320)
+          : null,
       normalized_brief: brief.normalized_brief,
       weights: brief.weights,
       top_results: topResultsByBrief.get(brief.id) ?? [],
     }))
+
+    const recentBriefsSummary = recentBriefRows.map((brief) => {
+      const serviceType =
+        brief.normalized_brief &&
+          typeof brief.normalized_brief === "object" &&
+          "service_type" in brief.normalized_brief
+          ? String((brief.normalized_brief as { service_type?: unknown }).service_type ?? "")
+          : ""
+
+      return {
+        id: brief.id,
+        name: brief.name,
+        status: brief.status,
+        category: brief.category,
+        created_at: brief.created_at,
+        service_type: truncate(serviceType || "Untitled brief", 120),
+      }
+    })
+
+    const allBriefIds = new Set([
+      ...briefRows.map((brief) => brief.id),
+      ...recentBriefRows.map((brief) => brief.id),
+    ])
 
     const textAttachmentContext = attachments
       .map((attachment) => {
@@ -190,6 +270,8 @@ export async function POST(request: Request) {
         email: profile?.email ?? user.email ?? null,
       },
       referenced_briefs: briefContext,
+      recent_briefs_summary: recentBriefsSummary,
+      total_known_briefs: allBriefIds.size,
       latest_analytics: analyticsRaw ?? null,
       text_attachments: textAttachmentContext,
     }
@@ -213,6 +295,19 @@ export async function POST(request: Request) {
         brief_refs: briefRefs,
       })
 
+      console.info(
+        "[assistant]",
+        JSON.stringify({
+          event: "chat_complete",
+          duration_ms: Date.now() - startTime,
+          thread_id: body.thread_id,
+          brief_refs_count: briefRefs.length,
+          reply_length: fallback.length,
+          had_attachments: textAttachmentContext.length > 0,
+          streamed: false,
+        }),
+      )
+
       return NextResponse.json({ data: { reply: fallback } })
     }
 
@@ -231,7 +326,10 @@ export async function POST(request: Request) {
           {
             role: "system",
             content:
-              "You are ConnexaAI Assistant. Answer using only the current user's context. Never mention pipeline internals or other users. Be concise and actionable. Context: " +
+              "You are ConnexaAI Assistant. Answer using only the current user's context. " +
+              "When discussing specific briefs, reference them by their brief name when available. " +
+              "If asked to summarize briefs, use recent_briefs_summary and highlight status/category concisely. " +
+              "Never mention pipeline internals or other users. Be concise and actionable. Context: " +
               JSON.stringify(systemContext),
           },
           ...historyMessages,
@@ -298,18 +396,34 @@ export async function POST(request: Request) {
             controller.enqueue(encoder.encode(assistantReply))
           }
 
+          const inferredBriefRefs = inferBriefRefsFromReply(assistantReply, recentBriefRows)
+          const assistantBriefRefs = [...new Set([...briefRefs, ...inferredBriefRefs])]
+
           await supabase.from("chat_messages").insert({
             thread_id: body.thread_id,
             role: "assistant",
             content: assistantReply,
             attachments: [],
-            brief_refs: briefRefs,
+            brief_refs: assistantBriefRefs,
           })
 
           await supabase
             .from("chat_threads")
             .update({ updated_at: new Date().toISOString() })
             .eq("id", body.thread_id)
+
+          console.info(
+            "[assistant]",
+            JSON.stringify({
+              event: "chat_complete",
+              duration_ms: Date.now() - startTime,
+              thread_id: body.thread_id,
+              brief_refs_count: assistantBriefRefs.length,
+              reply_length: assistantReply.length,
+              had_attachments: textAttachmentContext.length > 0,
+              streamed: true,
+            }),
+          )
 
           controller.close()
         } catch (error) {

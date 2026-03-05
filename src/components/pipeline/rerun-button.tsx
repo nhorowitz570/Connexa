@@ -63,7 +63,7 @@ export function RerunButton({ briefId, status, normalizedBrief }: RerunButtonPro
       ? "deep"
       : "standard"
     : "standard"
-  const canRerun = status === "complete" || status === "failed" || status === "cancelled"
+  const canRerun = status === "complete" || status === "error" || status === "cancelled"
 
   useEffect(() => {
     if (!open) return

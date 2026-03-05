@@ -1,8 +1,9 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { type FormEvent, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+import { AnimatePresence, motion } from "framer-motion"
 import {
   Zap, Settings2, ArrowRight, Calendar, DollarSign, Tag,
   FileText, Loader2,
@@ -27,7 +28,7 @@ import { ClarificationRenderer } from "@/components/brief/clarification-renderer
 import { RunStatusPoller } from "@/components/pipeline/run-status-poller"
 
 type Mode = "simple" | "detailed" | null
-type Step = "select" | "form" | "loading"
+type Step = "select" | "form" | "searching"
 type SearchDepth = "standard" | "deep"
 
 const categories = [
@@ -63,126 +64,72 @@ const formatBudget = (value: number) => {
   return `$${value}`
 }
 
-function truncateText(value: string, maxLength: number): string {
-  const cleaned = value.replace(/\s+/g, " ").trim()
-  if (cleaned.length <= maxLength) return cleaned
-  return `${cleaned.slice(0, Math.max(0, maxLength - 1))}…`
+const panelTransition = {
+  initial: { opacity: 0, y: 12, filter: "blur(10px)", scale: 0.985 },
+  animate: { opacity: 1, y: 0, filter: "blur(0px)", scale: 1 },
+  exit: { opacity: 0, y: -8, filter: "blur(10px)", scale: 0.99 },
 }
 
-function buildPreparationSteps(input: {
-  mode: Mode
-  prompt: string
-  category: string
-  customCategory: string
-  industry: string
-  region: string
-  city: string
-  budget: number
-  deadline: string
-  searchDepth: SearchDepth
-  description: string
-}): string[] {
-  const steps: string[] = ["Checking your brief inputs"]
-
-  if (input.mode === "simple") {
-    if (input.prompt.trim().length > 0) {
-      steps.push(`Reviewing your prompt: "${truncateText(input.prompt, 58)}"`)
-    }
-  } else {
-    const categoryValue =
-      input.category === "Other" ? input.customCategory.trim() : input.category.trim()
-    if (categoryValue.length > 0) {
-      steps.push(`Mapping category: ${truncateText(categoryValue, 42)}`)
-    }
-    if (input.industry.trim().length > 0) {
-      steps.push(`Applying industry context: ${truncateText(input.industry, 42)}`)
-    }
-    if (input.region.trim().length > 0) {
-      steps.push(`Setting geography focus: ${truncateText(input.region, 42)}`)
-    }
-    if (input.city.trim().length > 0) {
-      steps.push(`Adding city signal: ${truncateText(input.city, 42)}`)
-    }
-    steps.push(`Applying budget target: ${formatBudget(input.budget)}`)
-    if (input.deadline) {
-      steps.push(`Interpreting deadline: ${input.deadline}`)
-    }
-    if (input.description.trim().length > 0) {
-      steps.push("Extracting requirements from your project description")
-    }
-  }
-
-  steps.push(
-    input.searchDepth === "deep"
-      ? "Preparing deep-search configuration"
-      : "Preparing standard-search configuration",
-  )
-  steps.push("Normalizing your brief with AI")
-  steps.push("Creating pipeline run tracker")
-
-  return [...new Set(steps)].slice(0, 8)
+const formContainerVariants = {
+  hidden: { opacity: 0, filter: "blur(8px)" },
+  show: {
+    opacity: 1,
+    filter: "blur(0px)",
+    transition: {
+      staggerChildren: 0.045,
+      delayChildren: 0.08,
+    },
+  },
 }
 
-type PreparingPipelineCardProps = {
-  steps: string[]
+const formItemVariants = {
+  hidden: { opacity: 0, y: 12, filter: "blur(8px)" },
+  show: {
+    opacity: 1,
+    y: 0,
+    filter: "blur(0px)",
+  },
 }
 
-function PreparingPipelineCard({ steps }: PreparingPipelineCardProps) {
-  const [activeStepIndex, setActiveStepIndex] = useState(0)
+const searchContentVariants = {
+  hidden: { opacity: 0, filter: "blur(10px)" },
+  show: {
+    opacity: 1,
+    filter: "blur(0px)",
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.06,
+    },
+  },
+} as const
 
-  useEffect(() => {
-    if (steps.length <= 1) return
-    const interval = window.setInterval(() => {
-      setActiveStepIndex((current) => (current + 1) % steps.length)
-    }, 1700)
-
-    return () => {
-      window.clearInterval(interval)
-    }
-  }, [steps.length])
-
-  const safeActiveStepIndex = steps.length > 0 ? activeStepIndex % steps.length : 0
-  const activeStep = steps[safeActiveStepIndex] ?? "Preparing run setup"
-
-  return (
-    <div className="rounded-2xl border border-[#1F1F1F] bg-[#0D0D0D] p-8 text-center">
-      <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/10">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
-      </div>
-      <h1 className="mb-2 text-2xl font-semibold text-white">Preparing Pipeline Run</h1>
-      <p className="text-[#919191]">Normalizing brief and starting real-time pipeline tracking...</p>
-
-      <div className="mx-auto mt-6 w-full max-w-xl rounded-xl border border-[#2A2A2A] bg-[#121212] p-4 text-left">
-        <p className="text-xs uppercase tracking-wide text-[#7f7f7f]">Working through setup</p>
-        <div className="relative mt-2 h-6 overflow-hidden">
-          <p
-            key={`${activeStepIndex}-${activeStep}`}
-            className="absolute inset-0 text-sm text-white animate-in fade-in slide-in-from-bottom-2 duration-300"
-          >
-            {activeStep}
-          </p>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          {steps.map((_, index) => (
-            <span
-              key={index}
-              className={`h-1.5 rounded-full transition-all ${
-                index === safeActiveStepIndex ? "w-6 bg-indigo-400" : "w-2 bg-[#2d2d2d]"
-              }`}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
+const searchItemVariants = {
+  hidden: { opacity: 0, y: 12, filter: "blur(10px)", scale: 0.99 },
+  show: {
+    opacity: 1,
+    y: 0,
+    filter: "blur(0px)",
+    scale: 1,
+    transition: { duration: 0.32, ease: "easeOut" as const },
+  },
+  exit: {
+    opacity: 0,
+    y: -8,
+    filter: "blur(8px)",
+    scale: 0.995,
+    transition: { duration: 0.2, ease: "easeInOut" as const },
+  },
+} as const
 
 export default function NewBriefPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const prefillPrompt = searchParams.get("prompt")
   const [mode, setMode] = useState<Mode>(null)
   const [step, setStep] = useState<Step>("select")
   const [runId, setRunId] = useState<string | null>(null)
   const [runStarted, setRunStarted] = useState(false)
+  const [lastAppliedPrefillPrompt, setLastAppliedPrefillPrompt] = useState<string | null>(null)
 
   // Form state
   const [prompt, setPrompt] = useState("")
@@ -212,23 +159,17 @@ export default function NewBriefPage() {
     if (mode === "simple") return prompt.trim().length >= 10
     return description.trim().length >= 10
   }, [mode, prompt, description])
-  const preparationSteps = useMemo(
-    () =>
-      buildPreparationSteps({
-        mode,
-        prompt,
-        category,
-        customCategory,
-        industry,
-        region,
-        city,
-        budget,
-        deadline,
-        searchDepth,
-        description,
-      }),
-    [mode, prompt, category, customCategory, industry, region, city, budget, deadline, searchDepth, description],
-  )
+
+  useEffect(() => {
+    const nextPrompt = prefillPrompt?.trim()
+    if (!nextPrompt || nextPrompt.length < 3) return
+    if (nextPrompt === lastAppliedPrefillPrompt) return
+
+    setPrompt(nextPrompt)
+    setMode("simple")
+    setStep("form")
+    setLastAppliedPrefillPrompt(nextPrompt)
+  }, [lastAppliedPrefillPrompt, prefillPrompt])
 
   const startPipeline = async (id: string): Promise<string> => {
     const response = await fetch("/api/pipeline/start", {
@@ -311,7 +252,7 @@ export default function NewBriefPage() {
     if (event) event.preventDefault()
     if (!canSubmit) return
     setLoading(true)
-    setStep("loading")
+    setStep("searching")
     setRunId(null)
     setRunStarted(false)
 
@@ -406,6 +347,7 @@ export default function NewBriefPage() {
       const nextRunId = await startPipeline(brief.id)
       setRunId(nextRunId)
       setRunStarted(true)
+      setStep("searching")
       toast.success("Brief submitted and run started.")
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to submit brief."
@@ -421,7 +363,7 @@ export default function NewBriefPage() {
   const handleClarificationSubmit = async (answers: Record<string, unknown>) => {
     if (!briefId || !normalizedBrief || !weights || !clarificationPayload) return
     setLoading(true)
-    setStep("loading")
+    setStep("searching")
     setRunStarted(false)
     setRunId(null)
     try {
@@ -441,6 +383,7 @@ export default function NewBriefPage() {
       const nextRunId = await startPipeline(briefId)
       setRunId(nextRunId)
       setRunStarted(true)
+      setStep("searching")
       toast.success("Clarifications saved. Run started.")
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to submit."
@@ -470,353 +413,478 @@ export default function NewBriefPage() {
 
   return (
     <div className="flex-1 flex items-center justify-center py-8">
-      {/* Mode Selection */}
-      {step === "select" && (
-        <div className="w-full max-w-2xl animate-in fade-in duration-500">
-          <div className="text-center mb-12">
-            <h1 className="text-3xl font-semibold text-white mb-3">Create New Brief</h1>
-            <p className="text-[#919191]">Choose how you want to describe your sourcing needs</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Simple Mode Card */}
-            <button
-              onClick={() => handleModeSelect("simple")}
-              className="group relative bg-[#0D0D0D] rounded-2xl p-8 border border-[#1F1F1F] hover:border-indigo-500/50 transition-all duration-300 text-left hover:scale-[1.02]"
-            >
-              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ArrowRight className="h-5 w-5 text-indigo-400" />
-              </div>
-              <div className="h-14 w-14 rounded-xl bg-indigo-500/10 flex items-center justify-center mb-6">
-                <Zap className="h-7 w-7 text-indigo-400" />
-              </div>
-              <h3 className="text-xl font-medium text-white mb-2">Simple Mode</h3>
-              <p className="text-[#919191] text-sm leading-relaxed">
-                Describe what you&apos;re looking for in plain text. Our AI will extract requirements automatically.
-              </p>
-              <div className="mt-6 flex items-center gap-2 text-sm text-indigo-400">
-                <span>Quick &amp; Easy</span>
-                <span className="text-[#333]">•</span>
-                <span>1 min</span>
-              </div>
-            </button>
-
-            {/* Detailed Mode Card */}
-            <button
-              onClick={() => handleModeSelect("detailed")}
-              className="group relative bg-[#0D0D0D] rounded-2xl p-8 border border-[#1F1F1F] hover:border-indigo-500/50 transition-all duration-300 text-left hover:scale-[1.02]"
-            >
-              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ArrowRight className="h-5 w-5 text-indigo-400" />
-              </div>
-              <div className="h-14 w-14 rounded-xl bg-indigo-500/10 flex items-center justify-center mb-6">
-                <Settings2 className="h-7 w-7 text-indigo-400" />
-              </div>
-              <h3 className="text-xl font-medium text-white mb-2">Detailed Mode</h3>
-              <p className="text-[#919191] text-sm leading-relaxed">
-                Specify exact requirements including budget, timeline, and category preferences.
-              </p>
-              <div className="mt-6 flex items-center gap-2 text-sm text-indigo-400">
-                <span>Precise Results</span>
-                <span className="text-[#333]">•</span>
-                <span>3-5 min</span>
-              </div>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Form Step */}
-      {step === "form" && !clarificationPayload && (
-        <div className="w-full max-w-2xl animate-in fade-in slide-in-from-right-4 duration-500">
-          <div className="mb-8">
-            <button
-              onClick={() => { setStep("select"); setMode(null) }}
-              className="text-[#919191] hover:text-white transition-colors text-sm mb-4"
-            >
-              ← Back to mode selection
-            </button>
-            <h1 className="text-3xl font-semibold text-white mb-2">
-              {mode === "simple" ? "Describe Your Needs" : "Brief Details"}
-            </h1>
-            <p className="text-[#919191]">
-              {mode === "simple"
-                ? "Tell us what you're looking for in your own words"
-                : "Fill in the details to get precise matches"}
-            </p>
-          </div>
-
-          <form
-            className="bg-[#0D0D0D] rounded-2xl p-8 border border-[#1F1F1F]"
-            onSubmit={handleSubmit}
+      <AnimatePresence mode="wait" initial={false}>
+        {step === "select" ? (
+          <motion.div
+            key="step-select"
+            variants={panelTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={{ duration: 0.34, ease: "easeOut" }}
+            className="w-full max-w-2xl"
           >
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">Brief Name (optional)</label>
+            <div className="mb-12 text-center">
+              <h1 className="mb-3 text-3xl font-semibold text-white">Create New Brief</h1>
+              <p className="text-[#919191]">Choose how you want to describe your sourcing needs</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <motion.button
+                type="button"
+                onClick={() => handleModeSelect("simple")}
+                whileHover={{ y: -3, scale: 1.015 }}
+                whileTap={{ scale: 0.99 }}
+                className="group relative rounded-2xl border border-[#1F1F1F] bg-[#0D0D0D] p-8 text-left transition-all duration-300 hover:border-indigo-500/50"
+              >
+                <div className="absolute right-4 top-4 opacity-0 transition-opacity group-hover:opacity-100">
+                  <ArrowRight className="h-5 w-5 text-indigo-400" />
+                </div>
+                <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-indigo-500/10">
+                  <Zap className="h-7 w-7 text-indigo-400" />
+                </div>
+                <h3 className="mb-2 text-xl font-medium text-white">Simple Mode</h3>
+                <p className="text-sm leading-relaxed text-[#919191]">
+                  Describe what you need in plain English. We&apos;ll turn it into a structured brief.
+                </p>
+                <div className="mt-6 flex items-center gap-2 text-sm text-indigo-400">
+                  <span>Quick &amp; Easy</span>
+                  <span className="text-[#333]">•</span>
+                  <span>~5 min</span>
+                </div>
+              </motion.button>
+
+              <motion.button
+                type="button"
+                onClick={() => handleModeSelect("detailed")}
+                whileHover={{ y: -3, scale: 1.015 }}
+                whileTap={{ scale: 0.99 }}
+                className="group relative rounded-2xl border border-[#1F1F1F] bg-[#0D0D0D] p-8 text-left transition-all duration-300 hover:border-indigo-500/50"
+              >
+                <div className="absolute right-4 top-4 opacity-0 transition-opacity group-hover:opacity-100">
+                  <ArrowRight className="h-5 w-5 text-indigo-400" />
+                </div>
+                <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-indigo-500/10">
+                  <Settings2 className="h-7 w-7 text-indigo-400" />
+                </div>
+                <h3 className="mb-2 text-xl font-medium text-white">Detailed Mode</h3>
+                <p className="text-sm leading-relaxed text-[#919191]">
+                  Add detailed requirements like budget, timeline, and category preferences.
+                </p>
+                <div className="mt-6 flex items-center gap-2 text-sm text-indigo-400">
+                  <span>Precise Results</span>
+                  <span className="text-[#333]">•</span>
+                  <span>10 min — 1 hr</span>
+                </div>
+              </motion.button>
+            </div>
+          </motion.div>
+        ) : null}
+
+        {step === "form" && !clarificationPayload ? (
+          <motion.div
+            key="step-form"
+            variants={panelTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="w-full max-w-2xl"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 8, filter: "blur(8px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              transition={{ duration: 0.32, delay: 0.06, ease: "easeOut" }}
+              className="mb-8"
+            >
+              <button
+                onClick={() => {
+                  setStep("select")
+                  setMode(null)
+                }}
+                className="mb-4 text-sm text-[#919191] transition-colors hover:text-white"
+              >
+                ← Back to mode selection
+              </button>
+              <h1 className="mb-2 text-3xl font-semibold text-white">
+                {mode === "simple" ? "Describe Your Needs" : "Brief Details"}
+              </h1>
+              <p className="text-[#919191]">
+                {mode === "simple"
+                  ? "Tell us what you're looking for in your own words"
+                  : "Fill in the details to get precise matches"}
+              </p>
+            </motion.div>
+
+            <motion.form
+              className="rounded-2xl border border-[#1F1F1F] bg-[#0D0D0D] p-8"
+              onSubmit={handleSubmit}
+              variants={formContainerVariants}
+              initial="hidden"
+              animate="show"
+            >
+              <motion.div variants={formItemVariants}>
+                <label className="mb-2 block text-sm font-medium text-white">Brief Name (optional)</label>
                 <input
                   type="text"
                   value={briefName}
                   onChange={(e) => setBriefName(e.target.value)}
                   placeholder="e.g. Q2 SEO Agency Search"
-                  className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white placeholder-[#666] focus:outline-none focus:border-indigo-500/50 transition-colors"
+                  className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
                 />
-              </div>
+              </motion.div>
 
-              {mode === "detailed" && (
-                <div className="space-y-3 rounded-xl border border-[#333] bg-[#111] p-4">
-                  <p className="text-sm font-medium text-white">Search Depth</p>
+              {mode === "detailed" ? (
+                <motion.div variants={formItemVariants} className="mt-6 space-y-3 rounded-xl border border-[#333] bg-[#111] p-4">
+                  <p className="text-sm font-medium text-white">Search Mode</p>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <button
                       type="button"
                       onClick={() => handleSearchDepthChange("standard")}
-                      className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                        searchDepth === "standard"
+                      className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${searchDepth === "standard"
                           ? "border-indigo-500/60 bg-indigo-500/10 text-white"
                           : "border-[#333] text-[#919191] hover:text-white"
-                      }`}
+                        }`}
                     >
-                      <p className="font-medium">Standard</p>
-                      <p className="text-xs opacity-80">Faster run with focused coverage.</p>
+                      <p className="font-medium">Quick</p>
+                      <p className="text-xs opacity-80">Fast search, usually done in ~5 minutes.</p>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleSearchDepthChange("deep")}
-                      className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                        searchDepth === "deep"
+                      className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${searchDepth === "deep"
                           ? "border-indigo-500/60 bg-indigo-500/10 text-white"
                           : "border-[#333] text-[#919191] hover:text-white"
-                      }`}
+                        }`}
                     >
-                      <p className="font-medium">Deep</p>
-                      <p className="text-xs opacity-80">Broader crawl, more candidates, slower run.</p>
+                      <p className="font-medium">Thorough</p>
+                      <p className="text-xs opacity-80">Deeper search across more sources. Can take up to an hour.</p>
                     </button>
                   </div>
-                </div>
-              )}
-            </div>
+                </motion.div>
+              ) : null}
 
-            {mode === "simple" ? (
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    What are you looking for?
-                  </label>
+              {mode === "simple" ? (
+                <motion.div variants={formItemVariants} className="mt-6">
+                  <label className="mb-2 block text-sm font-medium text-white">What are you looking for?</label>
                   <textarea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     placeholder="Describe your ideal vendor, partner, or service provider. Include any specific requirements, preferences, or constraints..."
                     rows={6}
-                    className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white placeholder-[#666] focus:outline-none focus:border-indigo-500/50 transition-colors resize-none"
+                    className="w-full resize-none rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
                   />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    <Tag className="h-4 w-4 inline mr-2 text-indigo-400" />
-                    Category
-                  </label>
-                  <select
-                    value={category}
-                    onChange={(e) => {
-                      setCategory(e.target.value)
-                      if (e.target.value !== "Other") setCustomCategory("")
-                      if (!CITY_RELEVANT_CATEGORIES.has(e.target.value)) setCity("")
-                    }}
-                    className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white focus:outline-none focus:border-indigo-500/50 transition-colors appearance-none cursor-pointer"
-                  >
-                    <option value="" className="bg-[#1A1A1A]">Select a category</option>
-                    {categories.map((cat) => (
-                      <option key={cat} value={cat} className="bg-[#1A1A1A]">{cat}</option>
-                    ))}
-                    <option value="Other" className="bg-[#1A1A1A]">Other</option>
-                  </select>
-                  {category === "Other" && (
-                    <div className="animate-in fade-in slide-in-from-top-2 duration-300 mt-3">
-                      <input
-                        type="text"
-                        value={customCategory}
-                        onChange={(e) => setCustomCategory(e.target.value)}
-                        placeholder="Enter custom category"
-                        required
-                        className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white placeholder-[#666] focus:outline-none focus:border-indigo-500/50 transition-colors"
-                      />
-                    </div>
-                  )}
-                </div>
+                </motion.div>
+              ) : (
+                <>
+                  <motion.div variants={formItemVariants} className="mt-6">
+                    <label className="mb-2 block text-sm font-medium text-white">
+                      <Tag className="mr-2 inline h-4 w-4 text-indigo-400" />
+                      Category
+                    </label>
+                    <select
+                      value={category}
+                      onChange={(e) => {
+                        setCategory(e.target.value)
+                        if (e.target.value !== "Other") setCustomCategory("")
+                        if (!CITY_RELEVANT_CATEGORIES.has(e.target.value)) setCity("")
+                      }}
+                      className="w-full cursor-pointer appearance-none rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white transition-colors focus:border-indigo-500/50 focus:outline-none"
+                    >
+                      <option value="" className="bg-[#1A1A1A]">Select a category</option>
+                      {categories.map((cat) => (
+                        <option key={cat} value={cat} className="bg-[#1A1A1A]">{cat}</option>
+                      ))}
+                      <option value="Other" className="bg-[#1A1A1A]">Other</option>
+                    </select>
+                    <AnimatePresence initial={false}>
+                      {category === "Other" ? (
+                        <motion.div
+                          initial={{ opacity: 0, y: -8, filter: "blur(5px)" }}
+                          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                          exit={{ opacity: 0, y: -6, filter: "blur(5px)" }}
+                          transition={{ duration: 0.24, ease: "easeOut" }}
+                          className="mt-3"
+                        >
+                          <input
+                            type="text"
+                            value={customCategory}
+                            onChange={(e) => setCustomCategory(e.target.value)}
+                            placeholder="Enter custom category"
+                            required
+                            className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
+                          />
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
+                  </motion.div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-white mb-2">
-                      <Building2 className="h-4 w-4 inline mr-2 text-indigo-400" />
-                      Company Name
-                    </label>
-                    <input
-                      type="text"
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      placeholder="e.g. Acme Corp"
-                      className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white placeholder-[#666] focus:outline-none focus:border-indigo-500/50 transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-white mb-2">
-                      <Briefcase className="h-4 w-4 inline mr-2 text-indigo-400" />
-                      Industry / Vertical
-                    </label>
-                    <input
-                      type="text"
-                      value={industry}
-                      onChange={(e) => setIndustry(e.target.value)}
-                      placeholder="e.g. Healthcare, SaaS"
-                      className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white placeholder-[#666] focus:outline-none focus:border-indigo-500/50 transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-white mb-2">
-                      <Globe className="h-4 w-4 inline mr-2 text-indigo-400" />
-                      Region
-                    </label>
-                    <input
-                      type="text"
-                      value={region}
-                      onChange={(e) => setRegion(e.target.value)}
-                      placeholder="e.g. North America, Global"
-                      className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white placeholder-[#666] focus:outline-none focus:border-indigo-500/50 transition-colors"
-                    />
-                  </div>
-                  {CITY_RELEVANT_CATEGORIES.has(category) && (
+                  <motion.div variants={formItemVariants} className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
                     <div>
-                      <label className="block text-sm font-medium text-white mb-2">
-                        <MapPin className="h-4 w-4 inline mr-2 text-indigo-400" />
-                        City
+                      <label className="mb-2 block text-sm font-medium text-white">
+                        <Building2 className="mr-2 inline h-4 w-4 text-indigo-400" />
+                        Company Name
                       </label>
                       <input
                         type="text"
-                        value={city}
-                        onChange={(e) => setCity(e.target.value)}
-                        placeholder="e.g. San Francisco"
-                        className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white placeholder-[#666] focus:outline-none focus:border-indigo-500/50 transition-colors"
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        placeholder="e.g. Acme Corp"
+                        className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
                       />
                     </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    <DollarSign className="h-4 w-4 inline mr-2 text-indigo-400" />
-                    Budget Range
-                  </label>
-                  <div className="space-y-3">
-                    <input
-                      type="range"
-                      min={5000}
-                      max={500000}
-                      step={5000}
-                      value={budget}
-                      onChange={(e) => setBudget(Number(e.target.value))}
-                      className="w-full h-2 bg-[#333] rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                    />
-                    <div className="flex justify-between text-sm">
-                      <span className="text-[#919191]">$5K</span>
-                      <span className="text-white font-medium">{formatBudget(budget)}</span>
-                      <span className="text-[#919191]">$500K+</span>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-white">
+                        <Briefcase className="mr-2 inline h-4 w-4 text-indigo-400" />
+                        Industry / Vertical
+                      </label>
+                      <input
+                        type="text"
+                        value={industry}
+                        onChange={(e) => setIndustry(e.target.value)}
+                        placeholder="e.g. Healthcare, SaaS"
+                        className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
+                      />
                     </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-white">
+                        <Globe className="mr-2 inline h-4 w-4 text-indigo-400" />
+                        Region
+                      </label>
+                      <input
+                        type="text"
+                        value={region}
+                        onChange={(e) => setRegion(e.target.value)}
+                        placeholder="e.g. North America, Global"
+                        className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
+                      />
+                    </div>
+                    <AnimatePresence initial={false}>
+                      {CITY_RELEVANT_CATEGORIES.has(category) ? (
+                        <motion.div
+                          initial={{ opacity: 0, y: -8, filter: "blur(5px)" }}
+                          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                          exit={{ opacity: 0, y: -6, filter: "blur(5px)" }}
+                          transition={{ duration: 0.24, ease: "easeOut" }}
+                        >
+                          <label className="mb-2 block text-sm font-medium text-white">
+                            <MapPin className="mr-2 inline h-4 w-4 text-indigo-400" />
+                            City
+                          </label>
+                          <input
+                            type="text"
+                            value={city}
+                            onChange={(e) => setCity(e.target.value)}
+                            placeholder="e.g. San Francisco"
+                            className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
+                          />
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
+                  </motion.div>
+
+                  <motion.div variants={formItemVariants} className="mt-6">
+                    <label className="mb-2 block text-sm font-medium text-white">
+                      <DollarSign className="mr-2 inline h-4 w-4 text-indigo-400" />
+                      Budget Range
+                    </label>
+                    <div className="space-y-3">
+                      <input
+                        type="range"
+                        min={5000}
+                        max={500000}
+                        step={5000}
+                        value={budget}
+                        onChange={(e) => setBudget(Number(e.target.value))}
+                        className="h-3 w-full cursor-pointer appearance-none rounded-lg bg-[#333] accent-indigo-500"
+                      />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[#919191]">$5K</span>
+                        <span className="font-medium text-white">{formatBudget(budget)}</span>
+                        <span className="text-[#919191]">$500K+</span>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  <motion.div variants={formItemVariants} className="mt-6">
+                    <label className="mb-2 block text-sm font-medium text-white">
+                      <Calendar className="mr-2 inline h-4 w-4 text-indigo-400" />
+                      Target Deadline
+                    </label>
+                    <input
+                      type="date"
+                      value={deadline}
+                      onChange={(e) => setDeadline(e.target.value)}
+                      className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white transition-colors focus:border-indigo-500/50 focus:outline-none"
+                    />
+                  </motion.div>
+
+                  <motion.div variants={formItemVariants} className="mt-6">
+                    <label className="mb-2 block text-sm font-medium text-white">
+                      <FileText className="mr-2 inline h-4 w-4 text-indigo-400" />
+                      Project Description
+                    </label>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Describe your project requirements, goals, and any specific criteria..."
+                      rows={4}
+                      className="w-full resize-none rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
+                    />
+                  </motion.div>
+                </>
+              )}
+
+              <motion.button
+                variants={formItemVariants}
+                type="submit"
+                disabled={!canSubmit || loading}
+                whileTap={{ scale: 0.985 }}
+                className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-4 font-medium text-white transition-all duration-200 hover:bg-indigo-700 disabled:bg-[#333] disabled:text-[#666]"
+              >
+                <span>Find Matches</span>
+                <ArrowRight className="h-5 w-5" />
+              </motion.button>
+            </motion.form>
+          </motion.div>
+        ) : null}
+
+        {step === "searching" ? (
+          <motion.div
+            key="step-searching"
+            variants={panelTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={{ duration: 0.42, ease: "easeOut" }}
+            className="w-full max-w-3xl"
+          >
+            <div className="relative overflow-hidden rounded-2xl border border-[#1F1F1F] bg-[#0A0D14] p-6">
+              <motion.div
+                aria-hidden
+                className="pointer-events-none absolute -left-16 -top-24 h-56 w-56 rounded-full bg-indigo-500/20 blur-3xl"
+                animate={{ x: [-14, 18, -14], y: [0, 8, 0], opacity: [0.35, 0.6, 0.35] }}
+                transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+              />
+              <motion.div
+                aria-hidden
+                className="pointer-events-none absolute -bottom-20 right-0 h-56 w-56 rounded-full bg-cyan-500/10 blur-3xl"
+                animate={{ x: [16, -10, 16], y: [0, -8, 0], opacity: [0.25, 0.45, 0.25] }}
+                transition={{ duration: 8.5, repeat: Infinity, ease: "easeInOut" }}
+              />
+
+              <motion.div
+                className="relative z-10 space-y-5"
+                variants={searchContentVariants}
+                initial="hidden"
+                animate="show"
+              >
+                <motion.div className="flex flex-wrap items-start justify-between gap-4" variants={searchItemVariants}>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-indigo-300/80">Live Search</p>
+                    <h2 className="mt-1 text-2xl font-semibold text-white">Finding your top provider matches</h2>
+                    <p className="mt-1 text-sm text-[#A7AFBA]">
+                      We&apos;re actively searching, scoring, and ranking candidates. You can close this page at any time.
+                    </p>
                   </div>
-                </div>
+                  <div className="inline-flex items-center gap-1 rounded-full border border-[#2B2F3A] bg-[#121722] px-3 py-1.5 text-xs text-[#C8D0DC]">
+                    <span
+                      className={`h-2 w-2 animate-pulse rounded-full ${runStarted && runId ? "bg-emerald-400" : "bg-amber-300"
+                        }`}
+                    />
+                    {runStarted && runId ? "Running" : "Starting"}
+                  </div>
+                </motion.div>
 
-                <div>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    <Calendar className="h-4 w-4 inline mr-2 text-indigo-400" />
-                    Target Deadline
-                  </label>
-                  <input
-                    type="date"
-                    value={deadline}
-                    onChange={(e) => setDeadline(e.target.value)}
-                    className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white focus:outline-none focus:border-indigo-500/50 transition-colors"
-                  />
-                </div>
+                <AnimatePresence mode="wait" initial={false}>
+                  {runStarted && runId ? (
+                    <motion.div
+                      key="search-live-progress"
+                      variants={searchItemVariants}
+                      initial="hidden"
+                      animate="show"
+                      exit="exit"
+                    >
+                      <RunStatusPoller
+                        briefId={briefId ?? ""}
+                        normalizedBrief={normalizedBrief}
+                        runId={runId}
+                        initialStatus="running"
+                        initialConfidence={null}
+                        initialNotes={[]}
+                        onRunFinished={handleRunFinished}
+                        variant="immersive"
+                      />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="search-starting-progress"
+                      variants={searchItemVariants}
+                      initial="hidden"
+                      animate="show"
+                      exit="exit"
+                      className="rounded-xl border border-[#2A2A2A] bg-[#10131A] p-4 text-left"
+                    >
+                      <div className="flex items-center gap-2 text-sm font-medium text-white">
+                        <Loader2 className="h-4 w-4 animate-spin text-indigo-300" />
+                        Starting live search...
+                      </div>
+                      <p className="mt-2 text-xs text-[#8D96A5]">
+                        We&apos;re connecting your brief to the search pipeline now. If we need clarification, we&apos;ll ask follow-up questions automatically.
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                <div>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    <FileText className="h-4 w-4 inline mr-2 text-indigo-400" />
-                    Project Description
-                  </label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe your project requirements, goals, and any specific criteria..."
-                    rows={4}
-                    className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-xl text-white placeholder-[#666] focus:outline-none focus:border-indigo-500/50 transition-colors resize-none"
-                  />
-                </div>
-              </div>
-            )}
+                <motion.div className="grid gap-3 sm:grid-cols-2" variants={searchItemVariants}>
+                  <motion.div className="rounded-xl border border-[#2A2E3A] bg-[#101625] p-4 text-left" variants={searchItemVariants}>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-indigo-300/80">What Happens Next</p>
+                    <ul className="mt-2 space-y-1.5 text-sm text-[#BCC6D8]">
+                      <li>Understanding your brief requirements</li>
+                      <li>Searching and filtering candidate companies</li>
+                      <li>Scoring each match and ranking your top picks</li>
+                    </ul>
+                  </motion.div>
+                  <motion.div className="rounded-xl border border-[#2A2E3A] bg-[#101625] p-4 text-left" variants={searchItemVariants}>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-indigo-300/80">Timing</p>
+                    <p className="mt-2 text-sm text-[#D6DEEA]">Quick searches usually finish in around 5 minutes.</p>
+                    <p className="mt-1 text-sm text-[#B1BDD2]">Thorough searches can take up to an hour.</p>
+                    <p className="mt-2 text-xs text-[#95A1B6]">You can leave this page safely while the search runs.</p>
+                  </motion.div>
+                </motion.div>
+              </motion.div>
+            </div>
 
-            <button
-              type="submit"
-              disabled={!canSubmit || loading}
-              className="w-full mt-8 flex items-center justify-center gap-2 px-6 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-[#333] disabled:text-[#666] text-white font-medium rounded-xl transition-all duration-200"
+            <motion.div
+              className="mt-4 flex justify-center"
+              initial={{ opacity: 0, y: 8, filter: "blur(8px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              transition={{ duration: 0.28, delay: 0.12, ease: "easeOut" }}
             >
-              <span>Run Brief</span>
-              <ArrowRight className="h-5 w-5" />
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* Loading Step */}
-      {step === "loading" && (
-        <div className="w-full max-w-2xl animate-in fade-in zoom-in-95 duration-500">
-          {!runStarted || !runId ? (
-            <div>
-              <PreparingPipelineCard steps={preparationSteps} />
               <button
                 type="button"
                 onClick={() => setCancelDialogOpen(true)}
                 disabled={canceling || !briefId}
-                className="mt-6 rounded-lg border border-[#333] px-4 py-2 text-sm text-[#919191] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-[#333] px-4 py-2 text-sm text-[#919191] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {canceling ? "Cancelling..." : "Cancel"}
               </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <RunStatusPoller
-                runId={runId}
-                initialStatus="running"
-                initialConfidence={null}
-                initialNotes={[]}
-                onRunFinished={handleRunFinished}
-              />
-              <div className="flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => setCancelDialogOpen(true)}
-                  disabled={canceling || !briefId}
-                  className="rounded-lg border border-[#333] px-4 py-2 text-sm text-[#919191] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {canceling ? "Cancelling..." : "Cancel"}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <Dialog open={deepWarningOpen} onOpenChange={setDeepWarningOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Enable Deep Search?</DialogTitle>
+            <DialogTitle>Enable Thorough Search?</DialogTitle>
             <DialogDescription>
-              Deep mode can take a very long time and uses significantly more credits.
+              Thorough mode searches more broadly and can take 10 minutes to 1 hour. You can close this page and come back later.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeepWarningOpen(false)}>
-              Stay with Standard
+              Keep Quick Mode
             </Button>
             <Button
               onClick={() => {
@@ -824,7 +892,7 @@ export default function NewBriefPage() {
                 setDeepWarningOpen(false)
               }}
             >
-              Enable Deep Search
+              Enable Thorough Mode
             </Button>
           </DialogFooter>
         </DialogContent>

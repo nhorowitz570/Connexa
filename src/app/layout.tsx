@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { Space_Grotesk } from "next/font/google";
+import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
@@ -20,14 +21,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body
-        className={`${spaceGrotesk.variable} antialiased`}
-      >
-        <TooltipProvider>
-          {children}
-          <Toaster richColors position="top-right" />
-        </TooltipProvider>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body className={`${spaceGrotesk.variable} antialiased`}>
+        <ThemeProvider>
+          <TooltipProvider>
+            {children}
+            <Toaster richColors position="top-right" />
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

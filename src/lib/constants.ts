@@ -40,6 +40,35 @@ export function getPipelineLimits(depth: SearchDepth = "standard"): PipelineLimi
   return depth === "deep" ? DEEP_PIPELINE_LIMITS : PIPELINE_LIMITS
 }
 
+function parsePositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name]
+  if (!raw) return fallback
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+const DEFAULT_PIPELINE_TIMEOUTS = {
+  STANDARD_MS: 8 * 60 * 1000,
+  DEEP_MS: 60 * 60 * 1000,
+} as const
+
+const globalPipelineTimeoutMs = parsePositiveIntEnv("PIPELINE_TIMEOUT_MS", 0)
+
+export const PIPELINE_TIMEOUTS = {
+  STANDARD_MS:
+    globalPipelineTimeoutMs > 0
+      ? globalPipelineTimeoutMs
+      : parsePositiveIntEnv("PIPELINE_TIMEOUT_MS_STANDARD", DEFAULT_PIPELINE_TIMEOUTS.STANDARD_MS),
+  DEEP_MS:
+    globalPipelineTimeoutMs > 0
+      ? globalPipelineTimeoutMs
+      : parsePositiveIntEnv("PIPELINE_TIMEOUT_MS_DEEP", DEFAULT_PIPELINE_TIMEOUTS.DEEP_MS),
+} as const
+
+export function getPipelineTimeoutMs(depth: SearchDepth = "standard"): number {
+  return depth === "deep" ? PIPELINE_TIMEOUTS.DEEP_MS : PIPELINE_TIMEOUTS.STANDARD_MS
+}
+
 export const BLOCKLIST_DOMAINS = [
   "facebook.com",
   "instagram.com",
@@ -86,9 +115,9 @@ export const MISS_REASONS = {
 
 export const SCORE_LABELS: Record<string, string> = {
   service_match: "Service Fit",
-  budget_fit: "Budget Alignment",
-  industry_fit: "Industry Relevance",
-  timeline_fit: "Timeline Compatibility",
+  budget_fit: "Budget Match",
+  industry_fit: "Industry Experience",
+  timeline_fit: "Timeline Fit",
   geo_fit: "Location Match",
-  constraint_fit: "Requirements Met",
+  constraint_fit: "Meets Requirements",
 }

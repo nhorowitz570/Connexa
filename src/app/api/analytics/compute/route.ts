@@ -16,7 +16,7 @@ type ComputeInput = {
 type BriefRow = {
   id: string
   user_id: string
-  status: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
+  status: "draft" | "clarifying" | "running" | "complete" | "error" | "cancelled"
   normalized_brief: unknown
 }
 
@@ -280,7 +280,7 @@ async function computeForDate(options: {
 
     const totalBriefs = userBriefs.length
     const completedBriefs = userBriefs.filter((brief) => brief.status === "complete").length
-    const failedBriefs = userBriefs.filter((brief) => brief.status === "failed").length
+    const failedBriefs = userBriefs.filter((brief) => brief.status === "error").length
 
     const avgConfidence =
       userRuns.length > 0

@@ -2,12 +2,14 @@ import { DashboardStats } from "@/components/dashboard/dashboard-stats"
 import { EmptyState } from "@/components/dashboard/empty-state"
 import { PerformanceChart } from "@/components/dashboard/performance-chart"
 import { RecentBriefsTable } from "@/components/dashboard/recent-briefs-table"
+import { RecommendationCards } from "@/components/dashboard/recommendation-cards"
 import { createClient } from "@/lib/supabase/server"
 
 type BriefRow = {
   id: string
+  name: string | null
   mode: "simple" | "detailed"
-  status: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
+  status: "draft" | "clarifying" | "running" | "complete" | "error" | "cancelled"
   created_at: string
   normalized_brief: unknown
 }
@@ -48,15 +50,15 @@ export default async function DashboardHomePage() {
       .from("briefs")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
-      .eq("status", "failed"),
+      .eq("status", "error"),
     supabase
       .from("briefs")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
-      .eq("status", "running"),
+      .in("status", ["running", "clarifying"]),
     supabase
       .from("briefs")
-      .select("id, mode, status, created_at, normalized_brief")
+      .select("id, name, mode, status, created_at, normalized_brief")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(10),
@@ -109,21 +111,22 @@ export default async function DashboardHomePage() {
 
     return {
       id: brief.id,
+      name: brief.name,
       mode: brief.mode,
       status: brief.status,
       createdAt: brief.created_at,
-      serviceType: normalized.service_type ?? "Untitled brief",
+      serviceType: brief.name ?? normalized.service_type ?? "Untitled brief",
       topMatch: topResult?.company_name ?? null,
       topScore: topResult?.score_overall ?? null,
     }
   })
 
   return (
-    <section className="flex flex-col gap-6 animate-in fade-in duration-500">
+    <section className="flex flex-col gap-6 pb-6">
       <DashboardStats
         totalBriefs={totalBriefs ?? 0}
         failedBriefs={failedBriefs ?? 0}
-        runningBriefs={runningBriefs ?? 0}
+        activeBriefs={runningBriefs ?? 0}
         averageScore={averageScore}
       />
 
@@ -133,12 +136,15 @@ export default async function DashboardHomePage() {
         <EmptyState
           title="No briefs yet"
           description="Submit your first brief to find the right provider."
-          actionLabel="Create Brief"
+          actionLabel="Find Matches"
           actionHref="/brief/new"
         />
       ) : (
         <RecentBriefsTable rows={rows} />
       )}
+
+      <RecommendationCards />
+
     </section>
   )
 }

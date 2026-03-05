@@ -1,13 +1,14 @@
-type OpenRouterMessage = {
+export type OpenRouterMessage = {
   role: "system" | "user" | "assistant"
   content: string
 }
 
-type OpenRouterOptions = {
+export type OpenRouterOptions = {
   model: string
   response_format?: { type: "json_object" }
   max_tokens?: number
   temperature?: number
+  signal?: AbortSignal
 }
 
 type OpenRouterResponse = {
@@ -53,6 +54,7 @@ export async function callOpenRouter(
       max_tokens: options.max_tokens ?? 1200,
       response_format: options.response_format,
     }),
+    signal: options.signal ?? AbortSignal.timeout(60000),
   })
 
   if (!response.ok) {

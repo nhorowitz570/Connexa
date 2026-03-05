@@ -12,6 +12,14 @@ function barColor(score: number): string {
   return "bg-amber-500"
 }
 
+function scoreQualifier(score: number): string {
+  if (score >= 90) return "Excellent"
+  if (score >= 75) return "Good"
+  if (score >= 60) return "Fair"
+  if (score >= 40) return "Weak"
+  return "Poor"
+}
+
 export function ScoreBreakdown({ breakdown }: ScoreBreakdownProps) {
   return (
     <div className="space-y-2">
@@ -19,9 +27,11 @@ export function ScoreBreakdown({ breakdown }: ScoreBreakdownProps) {
         <div key={key} className="space-y-1">
           <div className="flex justify-between text-xs">
             <span>{SCORE_LABELS[key] ?? key.replaceAll("_", " ")}</span>
-            <span>{score}</span>
+            <span>
+              {scoreQualifier(score)} ({score})
+            </span>
           </div>
-          <div className="h-2 rounded bg-[#30363D]">
+          <div className="h-2 rounded bg-gray-200 dark:bg-[#30363D]">
             <div className={`h-2 rounded ${barColor(score)}`} style={{ width: `${score}%` }} />
           </div>
         </div>

@@ -4,9 +4,9 @@ import type { BriefStatus } from "@/types"
 const labelMap: Record<BriefStatus, string> = {
   draft: "Draft",
   clarifying: "Clarifying",
-  running: "Running",
+  running: "Searching",
   complete: "Complete",
-  failed: "Failed",
+  error: "Error",
   cancelled: "Cancelled",
 }
 
@@ -15,7 +15,7 @@ const classMap: Record<BriefStatus, string> = {
   clarifying: "bg-amber-500/20 text-amber-400",
   running: "bg-blue-500/20 text-blue-400",
   complete: "bg-emerald-500/20 text-emerald-400",
-  failed: "bg-red-500/20 text-red-400",
+  error: "bg-red-500/20 text-red-400",
   cancelled: "bg-slate-500/20 text-slate-300",
 }
 

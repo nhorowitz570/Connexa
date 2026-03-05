@@ -73,12 +73,12 @@ export default async function ExportBriefPage({
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-lg font-semibold">Latest Run</h2>
+        <h2 className="text-lg font-semibold">Latest Search</h2>
         {latestRun ? (
           <div className="space-y-2 text-sm">
             <p>Run ID: {latestRun.id}</p>
             <p>Status: {latestRun.status}</p>
-            <p>Confidence: {latestRun.confidence_overall ?? "n/a"}</p>
+            <p>Match confidence: {latestRun.confidence_overall ?? "n/a"}</p>
             {Array.isArray(latestRun.notes) && latestRun.notes.length > 0 ? (
               <ul className="list-disc space-y-1 pl-5">
                 {latestRun.notes
@@ -103,8 +103,8 @@ export default async function ExportBriefPage({
                 <h3 className="font-medium">{String(result.company_name)}</h3>
                 <p className="text-sm text-slate-600">{String(result.website_url)}</p>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-700">
-                  <p>Score: {String(result.score_overall)}</p>
-                  <p>Confidence: {String(result.confidence)}</p>
+                  <p>Match score: {String(result.score_overall)}</p>
+                  <p>Match confidence: {String(result.confidence)}</p>
                   <p>Geography: {String(result.geography ?? "n/a")}</p>
                 </div>
                 <p className="mt-2 text-sm">{String(result.reasoning_summary ?? "")}</p>
@@ -117,7 +117,7 @@ export default async function ExportBriefPage({
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-lg font-semibold">Normalized Brief JSON</h2>
+        <h2 className="text-lg font-semibold">Brief Summary JSON</h2>
         <pre className="overflow-x-auto rounded-md border border-slate-200 bg-slate-50 p-3 text-xs">
           {JSON.stringify(brief.normalized_brief, null, 2)}
         </pre>

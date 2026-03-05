@@ -5,6 +5,7 @@ import { type FormEvent, useMemo, useState } from "react"
 
 import { BriefMentionPicker } from "@/components/assistant/brief-mention-picker"
 import { FileUploadButton } from "@/components/assistant/file-upload-button"
+import { MentionCard } from "@/components/assistant/mention-card"
 import { SpeechButton } from "@/components/assistant/speech-button"
 import type { ChatAttachment } from "@/components/assistant/types"
 import { Badge } from "@/components/ui/badge"
@@ -37,6 +38,10 @@ export function ChatInput({ disabled, onSend }: ChatInputProps) {
     () => !disabled && (message.trim().length > 0 || attachments.length > 0),
     [attachments.length, disabled, message],
   )
+  const composerRows = useMemo(() => {
+    const lineCount = message.split("\n").length
+    return Math.min(8, Math.max(2, lineCount))
+  }, [message])
   const briefRefsInComposer = useMemo(() => extractBriefRefs(message), [message])
 
   const updateMentionState = (nextValue: string) => {
@@ -64,7 +69,10 @@ export function ChatInput({ disabled, onSend }: ChatInputProps) {
   }
 
   return (
-    <form className="space-y-3 border-t border-[#1F1F1F] bg-[#0D0D0D] p-3" onSubmit={(event) => void handleSubmit(event)}>
+    <form
+      className="glass-card sticky bottom-0 space-y-3 border-t border-white/10 bg-[#0b1019]/95 p-3 backdrop-blur-2xl"
+      onSubmit={(event) => void handleSubmit(event)}
+    >
       {attachments.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {attachments.map((attachment, index) => (
@@ -87,9 +95,7 @@ export function ChatInput({ disabled, onSend }: ChatInputProps) {
       {briefRefsInComposer.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {briefRefsInComposer.map((briefId) => (
-            <Badge key={briefId} variant="secondary" className="max-w-64 gap-1">
-              <span className="truncate">@brief:{briefId}</span>
-            </Badge>
+            <MentionCard key={briefId} briefId={briefId} compact />
           ))}
         </div>
       ) : null}
@@ -103,7 +109,8 @@ export function ChatInput({ disabled, onSend }: ChatInputProps) {
             updateMentionState(next)
           }}
           placeholder="Ask about your briefs, results, or strategy..."
-          className="min-h-24"
+          className="min-h-[88px] resize-none border-white/10 bg-[#0f1624] pr-14 text-white placeholder:text-[#7f8aa3]"
+          rows={composerRows}
           disabled={disabled}
         />
         <div className="absolute left-2 top-2">
@@ -143,11 +150,19 @@ export function ChatInput({ disabled, onSend }: ChatInputProps) {
           />
         </div>
 
-        <Button type="submit" disabled={!canSend}>
+        <Button
+          type="submit"
+          disabled={!canSend}
+          className="h-11 rounded-xl bg-indigo-600 px-4 text-white hover:bg-indigo-500"
+        >
           <SendHorizontal className="mr-2 h-4 w-4" />
           Send
         </Button>
       </div>
+
+      <p className="text-[11px] text-[#8a94a8]">
+        AI can make mistakes. Double-check important details before acting on suggestions.
+      </p>
     </form>
   )
 }

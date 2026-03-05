@@ -1,6 +1,7 @@
 "use client"
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useState } from "react"
 
 import { BriefListItem } from "@/components/dashboard/brief-list-item"
 import { BriefSlideOver } from "@/components/dashboard/brief-slide-over"
@@ -26,8 +27,13 @@ export function HistoryClient({ briefs }: HistoryClientProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const [rows, setRows] = useState(briefs)
 
   const selectedBriefId = searchParams.get("brief")
+
+  useEffect(() => {
+    setRows(briefs)
+  }, [briefs])
 
   const setSelectedBrief = (briefId: string | null) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -41,10 +47,18 @@ export function HistoryClient({ briefs }: HistoryClientProps) {
     router.push(query.length > 0 ? `${pathname}?${query}` : pathname, { scroll: false })
   }
 
+  const handleBriefDeleted = (briefId: string) => {
+    setRows((current) => current.filter((brief) => brief.id !== briefId))
+    if (selectedBriefId === briefId) {
+      setSelectedBrief(null)
+    }
+    router.refresh()
+  }
+
   return (
     <>
       <div className="space-y-3">
-        {briefs.map((brief) => (
+        {rows.map((brief) => (
           <BriefListItem
             key={brief.id}
             id={brief.id}
@@ -69,6 +83,7 @@ export function HistoryClient({ briefs }: HistoryClientProps) {
             setSelectedBrief(null)
           }
         }}
+        onBriefDeleted={handleBriefDeleted}
       />
     </>
   )

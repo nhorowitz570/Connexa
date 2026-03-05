@@ -123,6 +123,11 @@
 
   body {
     @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(circle at 15% 12%, color-mix(in oklab, var(--primary) 16%, transparent), transparent 38%),
+      radial-gradient(circle at 84% 22%, color-mix(in oklab, #60a5fa 14%, transparent), transparent 36%),
+      radial-gradient(circle at 52% 100%, color-mix(in oklab, var(--primary) 9%, transparent), transparent 44%);
+    background-attachment: fixed;
   }
 
   /* Custom selection colors - indigo accent */
@@ -142,10 +147,102 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  .glass-card {
+    background: color-mix(in oklab, var(--card) 78%, transparent);
+    border: 1px solid color-mix(in oklab, var(--border) 82%, white 18%);
+    backdrop-filter: blur(36px);
+    -webkit-backdrop-filter: blur(36px);
+  }
+
+  .glass-card-hover {
+    transition: border-color 220ms ease, box-shadow 220ms ease, transform 220ms ease, background 220ms ease;
+  }
+
+  .glass-card-hover:hover {
+    background: color-mix(in oklab, var(--card) 84%, transparent);
+    border-color: color-mix(in oklab, var(--primary) 42%, var(--border));
+    box-shadow: 0 24px 50px -32px color-mix(in oklab, var(--primary) 46%, transparent);
+    transform: translateY(-2px);
+  }
+
+  .glow-text {
+    text-shadow: 0 0 24px color-mix(in oklab, var(--primary) 38%, transparent);
+  }
+
+  .animate-float-slow {
+    animation: float-slow 16s ease-in-out infinite;
+  }
+
+  .animate-float-medium {
+    animation: float-medium 11s ease-in-out infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2.4s ease-in-out infinite;
+  }
+
+  .subtle-grid-pattern {
+    background-image:
+      radial-gradient(circle, color-mix(in oklab, var(--foreground) 12%, transparent) 0.65px, transparent 0.95px),
+      repeating-linear-gradient(
+        0deg,
+        color-mix(in oklab, var(--foreground) 6%, transparent) 0,
+        color-mix(in oklab, var(--foreground) 6%, transparent) 1px,
+        transparent 1px,
+        transparent 34px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        color-mix(in oklab, var(--foreground) 6%, transparent) 0,
+        color-mix(in oklab, var(--foreground) 6%, transparent) 1px,
+        transparent 1px,
+        transparent 34px
+      );
+    background-size: 28px 28px, 34px 34px, 34px 34px;
+    opacity: 0.16;
+  }
+}
+
+/* Custom range slider styling for light theme */
+:root input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #d1d5db;
+  border-radius: 9999px;
+  height: 6px;
+  outline: none;
+}
+
+:root input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #6366f1;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.25);
+  transition: box-shadow 0.2s;
+}
+
+:root input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.4);
+}
+
+:root input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #6366f1;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.25);
 }
 
 /* Custom range slider styling for dark theme */
-input[type="range"] {
+.dark input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   background: #333;
@@ -154,7 +251,7 @@ input[type="range"] {
   outline: none;
 }
 
-input[type="range"]::-webkit-slider-thumb {
+.dark input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 20px;
@@ -167,11 +264,11 @@ input[type="range"]::-webkit-slider-thumb {
   transition: box-shadow 0.2s;
 }
 
-input[type="range"]::-webkit-slider-thumb:hover {
+.dark input[type="range"]::-webkit-slider-thumb:hover {
   box-shadow: 0 0 14px rgba(99, 102, 241, 0.6);
 }
 
-input[type="range"]::-moz-range-thumb {
+.dark input[type="range"]::-moz-range-thumb {
   width: 20px;
   height: 20px;
   border-radius: 50%;
@@ -181,8 +278,12 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
 }
 
-/* Date input styling for dark theme */
+/* Date input styling by theme */
 input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
   cursor: pointer;
 }
@@ -202,6 +303,54 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 .animate-slide-up {
   animation: slideUp 0.5s ease-out;
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0) translateX(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(-24px) translateX(12px) scale(1.04);
+  }
+}
+
+@keyframes float-medium {
+  0%,
+  100% {
+    transform: translateY(0) translateX(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(20px) translateX(-12px) scale(0.97);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 34%, transparent);
+    opacity: 0.78;
+  }
+
+  50% {
+    box-shadow: 0 0 0 9px color-mix(in oklab, var(--primary) 0%, transparent);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float-slow,
+  .animate-float-medium,
+  .animate-pulse-glow {
+    animation: none !important;
+  }
+
+  .glass-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
 @media print {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { DEFAULT_BRIEF_WEIGHTS, MODELS } from "@/lib/constants"
-import { callOpenRouter } from "@/lib/openrouter"
+import { callOpenRouterWithTimeout } from "@/lib/openrouter-with-timeout"
 import { NormalizeResponseSchema, NormalizedBriefSchema } from "@/lib/schemas"
 import type { BriefWeights, NormalizedBrief } from "@/types"
 
@@ -115,6 +115,10 @@ function mergeStructuredInput(
 
 export async function POST(request: Request) {
   try {
+    const startTime = Date.now()
+    let fellBackToHeuristic = false
+    let method: "llm" | "heuristic" = "heuristic"
+    let llmError: string | null = null
     const body = (await request.json()) as NormalizeInput
     if (!body.prompt || body.prompt.trim().length < 10) {
       return NextResponse.json(
@@ -132,7 +136,7 @@ export async function POST(request: Request) {
 
     if (process.env.OPENROUTER_API_KEY) {
       try {
-        const response = await callOpenRouter(
+        const response = await callOpenRouterWithTimeout(
           [
             {
               role: "system",
@@ -156,13 +160,19 @@ Return JSON exactly matching:
           {
             model: MODELS.CHEAP,
             response_format: { type: "json_object" },
+            timeoutMs: 20_000,
+            retries: 1,
           },
         )
 
         normalized = NormalizedBriefSchema.parse(JSON.parse(response))
-      } catch {
-        // Fallback to heuristic parser.
+        method = "llm"
+      } catch (error) {
+        fellBackToHeuristic = true
+        llmError = error instanceof Error ? error.message : "Unknown LLM error"
       }
+    } else {
+      llmError = "No API key"
     }
 
     normalized = mergeStructuredInput(
@@ -179,7 +189,26 @@ Return JSON exactly matching:
       normalized_brief: normalized,
       weights,
       confidence,
+      _meta: {
+        method,
+        llm_error: llmError,
+        fell_back_to_heuristic: fellBackToHeuristic,
+      },
     })
+
+    console.info(
+      "[normalize]",
+      JSON.stringify({
+        event: "normalize_complete",
+        duration_ms: Date.now() - startTime,
+        method,
+        fell_back_to_heuristic: fellBackToHeuristic,
+        llm_error: llmError,
+        confidence,
+        prompt_length: prompt.length,
+        has_structured_input: structuredInput?.success ?? false,
+      }),
+    )
 
     return NextResponse.json(payload)
   } catch (error) {

@@ -2,22 +2,36 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 
-import { Loader2 } from "lucide-react"
+import { AlertCircle, Loader2 } from "lucide-react"
 
 import { BriefStatusBadge } from "@/components/brief/brief-status-badge"
 import { PIPELINE_STEP_CONFIG, type PipelineStepKey, PipelineSteps } from "@/components/pipeline/pipeline-steps"
+import { RerunButton } from "@/components/pipeline/rerun-button"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
+import { cn } from "@/lib/utils"
 
 type RunStatusPollerProps = {
+  briefId: string
+  normalizedBrief: unknown
   runId: string
-  initialStatus: "running" | "complete" | "failed" | "cancelled"
+  initialStatus: "running" | "complete" | "error" | "cancelled"
   initialConfidence: number | null
   initialNotes: string[]
   onRunFinished?: () => void
+  variant?: "default" | "immersive"
 }
 
 type ApiStatusResponse = {
-  status: "running" | "complete" | "failed" | "cancelled"
+  status: "running" | "complete" | "error" | "cancelled"
   confidence_overall: number | null
   notes: string[]
   search_queries?: string[]
@@ -60,10 +74,20 @@ function isStepOrTagNote(note: string) {
   return note.startsWith("step:") || note.startsWith("miss:")
 }
 
-function getConfidenceTier(confidence: number): {
+function getConfidenceTier(confidence: number, variant: "default" | "immersive"): {
   label: "High" | "Medium" | "Low"
   className: string
 } {
+  if (variant === "immersive") {
+    if (confidence >= 0.75) {
+      return { label: "High", className: "border border-emerald-400/30 bg-emerald-500/15 text-emerald-200" }
+    }
+    if (confidence >= 0.5) {
+      return { label: "Medium", className: "border border-amber-400/30 bg-amber-500/15 text-amber-200" }
+    }
+    return { label: "Low", className: "border border-rose-400/30 bg-rose-500/15 text-rose-200" }
+  }
+
   if (confidence >= 0.75) {
     return { label: "High", className: "bg-emerald-100 text-emerald-700" }
   }
@@ -74,16 +98,21 @@ function getConfidenceTier(confidence: number): {
 }
 
 export function RunStatusPoller({
+  briefId,
+  normalizedBrief,
   runId,
   initialStatus,
   initialConfidence,
   initialNotes,
   onRunFinished,
+  variant = "default",
 }: RunStatusPollerProps) {
   const [status, setStatus] = useState(initialStatus)
   const [confidence, setConfidence] = useState(initialConfidence)
   const [notes, setNotes] = useState(initialNotes)
   const [queries, setQueries] = useState<string[]>([])
+  const [errorPopupOpen, setErrorPopupOpen] = useState(false)
+  const [hasSeenError, setHasSeenError] = useState(false)
   const previousStatusRef = useRef(initialStatus)
 
   useEffect(() => {
@@ -131,6 +160,19 @@ export function RunStatusPoller({
     previousStatusRef.current = status
   }, [onRunFinished, status])
 
+  useEffect(() => {
+    if (status === "error" && !hasSeenError) {
+      const timeout = window.setTimeout(() => {
+        setErrorPopupOpen(true)
+        setHasSeenError(true)
+      }, 0)
+
+      return () => {
+        window.clearTimeout(timeout)
+      }
+    }
+  }, [status, hasSeenError])
+
   const completedStepKeys = useMemo(() => extractStepKeys(notes), [notes])
   const progress = Math.round((completedStepKeys.length / PIPELINE_STEP_CONFIG.length) * 100)
 
@@ -140,7 +182,7 @@ export function RunStatusPoller({
     const substep = extractActiveSubstep(notes, nextStep?.key ?? null)
 
     if (!nextStep) {
-      if (status === "failed") {
+      if (status === "error") {
         return `Failed after ${completedStepKeys.length} of ${PIPELINE_STEP_CONFIG.length} steps`
       }
       if (status === "cancelled") {
@@ -149,25 +191,30 @@ export function RunStatusPoller({
       return `Completed ${PIPELINE_STEP_CONFIG.length} of ${PIPELINE_STEP_CONFIG.length} steps`
     }
 
-    const index = PIPELINE_STEP_CONFIG.findIndex((step) => step.key === nextStep.key)
-    const label = `Step ${index + 1} of ${PIPELINE_STEP_CONFIG.length}: ${nextStep.label}`
+    const label = nextStep.label
     return substep ? `${label} (${substep})` : label
   }, [completedStepKeys, notes, status])
 
   const displayNotes = notes.filter((note) => !isStepOrTagNote(note))
-  const confidenceTier = confidence !== null ? getConfidenceTier(confidence) : null
+  const confidenceTier = confidence !== null ? getConfidenceTier(confidence, variant) : null
   const isDeepSearchRun = notes.some((note) => note.toLowerCase().includes("search depth: deep"))
+  const isImmersive = variant === "immersive"
 
   return (
-    <div className="space-y-3 rounded-md border bg-card p-4">
+    <div
+      className={cn(
+        "space-y-3 rounded-md border bg-card p-4",
+        isImmersive && "space-y-4 rounded-2xl border-[#2A2E3A] bg-[#0F131C]/95 p-5 text-white",
+      )}
+    >
       <div className="flex flex-wrap items-center gap-2">
-        {status === "running" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+        {status === "running" ? <Loader2 className={cn("h-4 w-4 animate-spin", isImmersive && "text-indigo-300")} /> : null}
         <BriefStatusBadge
           status={
             status === "running"
               ? "running"
-              : status === "failed"
-                ? "failed"
+              : status === "error"
+                ? "error"
                 : status === "cancelled"
                   ? "cancelled"
                   : "complete"
@@ -175,42 +222,77 @@ export function RunStatusPoller({
         />
         {confidenceTier ? (
           <span className={`rounded-full px-2 py-1 text-xs font-medium ${confidenceTier.className}`}>
-            Confidence: {confidenceTier.label}
+            Result quality: {confidenceTier.label}
           </span>
         ) : null}
         {status === "running" && isDeepSearchRun ? (
           <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-300">
-            Deep search may take a while. You can come back later.
+            Thorough searches can take up to an hour. Feel free to close this page — we&apos;ll keep searching.
           </span>
         ) : null}
       </div>
 
-      <p className="text-sm text-muted-foreground">{activeStep}</p>
+      <p className={cn("text-sm text-muted-foreground", isImmersive && "text-[#C6CEDA]")}>{activeStep}</p>
 
-      <Progress value={progress} className="h-2 transition-all" />
+      <Progress
+        value={progress}
+        className={cn(
+          "h-2 transition-all",
+          isImmersive && "bg-[#1A1F2A] [&>div]:bg-gradient-to-r [&>div]:from-indigo-500 [&>div]:to-cyan-400",
+        )}
+      />
 
-      <PipelineSteps completedStepKeys={completedStepKeys} status={status} />
+      <PipelineSteps completedStepKeys={completedStepKeys} status={status} variant={variant} />
 
       {queries.length > 0 ? (
-        <div className="space-y-2 rounded-md border border-dashed p-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            What the AI is searching
+        <div
+          className={cn(
+            "space-y-2 rounded-md border border-dashed p-3",
+            isImmersive && "border-[#313746] bg-[#111622]",
+          )}
+        >
+          <p className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", isImmersive && "text-[#9EA8BA]")}>
+            Currently searching for
           </p>
-          <ul className="max-h-32 space-y-1 overflow-auto text-sm text-muted-foreground">
+          <ul className={cn("max-h-32 space-y-1 overflow-auto text-sm text-muted-foreground", isImmersive && "text-[#C6CEDA]")}>
             {queries.map((query) => (
-              <li key={query}>Searching: {query}</li>
+              <li key={query}>{query}</li>
             ))}
           </ul>
         </div>
       ) : null}
 
       {displayNotes.length > 0 ? (
-        <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+        <ul className={cn("list-disc space-y-1 pl-4 text-sm text-muted-foreground", isImmersive && "text-[#AAB4C4]")}>
           {displayNotes.map((note) => (
             <li key={note}>{note}</li>
           ))}
         </ul>
       ) : null}
+
+      <Dialog open={errorPopupOpen} onOpenChange={setErrorPopupOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              Search Error
+            </DialogTitle>
+            <DialogDescription>
+              This search encountered an error and could not finish. It can happen when AI requests time out or the network is unstable.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setErrorPopupOpen(false)}>
+              Dismiss
+            </Button>
+            <RerunButton
+              briefId={briefId}
+              status={status as "error"}
+              normalizedBrief={normalizedBrief}
+            />
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -7,8 +7,8 @@ type CancelInput = {
   brief_id?: string
 }
 
-const TERMINAL_BRIEF_STATUSES = new Set(["complete", "failed", "cancelled"])
-const TERMINAL_RUN_STATUSES = new Set(["complete", "failed", "cancelled"])
+const TERMINAL_BRIEF_STATUSES = new Set(["complete", "error", "cancelled"])
+const TERMINAL_RUN_STATUSES = new Set(["complete", "error", "cancelled"])
 
 export async function POST(request: Request) {
   try {

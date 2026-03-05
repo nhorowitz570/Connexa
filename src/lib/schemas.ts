@@ -135,6 +135,13 @@ export const NormalizeResponseSchema = z.object({
   normalized_brief: NormalizedBriefSchema,
   weights: BriefWeightsSchema,
   confidence: z.number().min(0).max(1),
+  _meta: z
+    .object({
+      method: z.enum(["llm", "heuristic"]),
+      llm_error: z.string().nullable().optional(),
+      fell_back_to_heuristic: z.boolean().optional(),
+    })
+    .optional(),
 })
 
 export const RerunOverridesSchema = z.object({

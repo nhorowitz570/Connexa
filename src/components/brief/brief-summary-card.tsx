@@ -46,7 +46,7 @@ function formatGeography(brief: NormalizedBrief): string {
 
 export function BriefSummaryCard({ normalizedBrief }: BriefSummaryCardProps) {
   if (!normalizedBrief) {
-    return <p className="text-sm text-muted-foreground">No normalized brief data available.</p>
+    return <p className="text-sm text-muted-foreground">Brief details are not available yet.</p>
   }
 
   return (
@@ -84,7 +84,7 @@ export function BriefSummaryCard({ normalizedBrief }: BriefSummaryCardProps) {
       </div>
 
       <div>
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">Constraints</p>
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">Additional Requirements</p>
         {normalizedBrief.constraints.length > 0 ? (
           <ul className="mt-1 list-disc space-y-1 pl-4">
             {normalizedBrief.constraints.map((constraint) => (
@@ -92,7 +92,7 @@ export function BriefSummaryCard({ normalizedBrief }: BriefSummaryCardProps) {
             ))}
           </ul>
         ) : (
-          <p className="text-muted-foreground">No constraints specified.</p>
+          <p className="text-muted-foreground">None specified.</p>
         )}
       </div>
     </div>

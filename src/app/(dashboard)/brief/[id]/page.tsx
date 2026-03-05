@@ -52,13 +52,13 @@ function parseResultRow(row: {
       row.score_breakdown && typeof row.score_breakdown === "object"
         ? row.score_breakdown
         : {
-            service_match: 0,
-            budget_fit: 0,
-            industry_fit: 0,
-            timeline_fit: 0,
-            geo_fit: 0,
-            constraint_fit: 0,
-          },
+          service_match: 0,
+          budget_fit: 0,
+          industry_fit: 0,
+          timeline_fit: 0,
+          geo_fit: 0,
+          constraint_fit: 0,
+        },
     reasoning_summary: row.reasoning_summary,
     reasoning_detailed:
       row.reasoning_detailed && typeof row.reasoning_detailed === "object"
@@ -91,27 +91,27 @@ export default async function BriefDetailPage({
 
   const brief = briefData as
     | {
-        id: string
-        name: string | null
-        mode: "simple" | "detailed"
-        status: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
-        normalized_brief: unknown
-        weights: unknown
-      }
+      id: string
+      name: string | null
+      mode: "simple" | "detailed"
+      status: "draft" | "clarifying" | "running" | "complete" | "error" | "cancelled"
+      normalized_brief: unknown
+      weights: unknown
+    }
     | null
 
   if (!brief) notFound()
 
   const { data: runsData } = await supabase
     .from("runs")
-      .select("*")
-      .eq("brief_id", brief.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
+    .select("*")
+    .eq("brief_id", brief.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
 
   const runs = (runsData as Array<{
     id: string
-    status: "running" | "complete" | "failed" | "cancelled"
+    status: "running" | "complete" | "error" | "cancelled"
     confidence_overall: number | null
     notes: unknown
     search_queries: unknown
@@ -123,12 +123,12 @@ export default async function BriefDetailPage({
   const latestRun = runs[0] ?? null
   const { data: rawResults } = latestRun
     ? await supabase
-        .from("results")
-        .select(
-          "company_name, website_url, contact_url, contact_email, geography, services, industries, pricing_signals, portfolio_signals, evidence_links, score_overall, score_breakdown, reasoning_summary, reasoning_detailed, confidence",
-        )
-        .eq("run_id", latestRun.id)
-        .order("score_overall", { ascending: false })
+      .from("results")
+      .select(
+        "company_name, website_url, contact_url, contact_email, geography, services, industries, pricing_signals, portfolio_signals, evidence_links, score_overall, score_breakdown, reasoning_summary, reasoning_detailed, confidence",
+      )
+      .eq("run_id", latestRun.id)
+      .order("score_overall", { ascending: false })
     : { data: [] as unknown[] }
 
   const results = (rawResults ?? [])
@@ -156,7 +156,7 @@ export default async function BriefDetailPage({
     .filter((row): row is ScoredResult => row !== null)
 
   const isLowConfidenceFailure =
-    brief.status === "failed" &&
+    brief.status === "error" &&
     latestRun?.confidence_overall !== null &&
     latestRun?.confidence_overall !== undefined &&
     latestRun.confidence_overall < CONFIDENCE.MIN_FOR_SUCCESS
@@ -169,27 +169,27 @@ export default async function BriefDetailPage({
   const latestRunDuration = latestRun?.status === "running"
     ? "Running..."
     : formatDuration(latestRun?.started_at ?? null, latestRun?.completed_at ?? null) ??
-      parseDurationFromNotes(latestRunNotes)
-  const latestRunDurationLabel = latestRunDuration ? `AI duration: ${latestRunDuration}` : null
+    parseDurationFromNotes(latestRunNotes)
+  const latestRunDurationLabel = latestRunDuration ? `Search took ${latestRunDuration}` : null
   const latestRunForClient = latestRun
     ? {
-        id: latestRun.id,
-        status: latestRun.status,
-        confidence_overall: latestRun.confidence_overall,
-        notes: latestRunNotes,
-      }
+      id: latestRun.id,
+      status: latestRun.status,
+      confidence_overall: latestRun.confidence_overall,
+      notes: latestRunNotes,
+    }
     : null
   const exportRun = latestRun
     ? {
-        id: latestRun.id,
-        status: latestRun.status,
-        confidence_overall: latestRun.confidence_overall,
-        notes: latestRunNotes,
-        search_queries: Array.isArray(latestRun.search_queries)
-          ? latestRun.search_queries.filter((value): value is string => typeof value === "string")
-          : [],
-        created_at: latestRun.created_at,
-      }
+      id: latestRun.id,
+      status: latestRun.status,
+      confidence_overall: latestRun.confidence_overall,
+      notes: latestRunNotes,
+      search_queries: Array.isArray(latestRun.search_queries)
+        ? latestRun.search_queries.filter((value): value is string => typeof value === "string")
+        : [],
+      created_at: latestRun.created_at,
+    }
     : null
 
   return (
@@ -197,7 +197,7 @@ export default async function BriefDetailPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <BriefNameEditor briefId={brief.id} initialName={brief.name} fallbackName={fallbackBriefName} />
-          <p className="text-sm text-muted-foreground">Review brief context and ranked provider matches.</p>
+          <p className="text-sm text-muted-foreground">Your brief summary and matched providers.</p>
           {latestRunDurationLabel ? <p className="text-xs text-muted-foreground">{latestRunDurationLabel}</p> : null}
         </div>
         <div className="flex items-center gap-2">
@@ -247,7 +247,11 @@ export default async function BriefDetailPage({
         </CardContent>
       </Card>
 
-      <BriefDetailClient latestRun={latestRunForClient} />
+      <BriefDetailClient
+        latestRun={latestRunForClient}
+        briefId={brief.id}
+        normalizedBrief={normalizedBrief.success ? normalizedBrief.data : brief.normalized_brief}
+      />
 
       {isLowConfidenceFailure ? <LowConfidenceTips mode={brief.mode} /> : null}
 
@@ -258,7 +262,7 @@ export default async function BriefDetailPage({
         {results.length === 0 ? (
           <Card>
             <CardContent className="pt-6 text-sm text-muted-foreground">
-              No results yet. If the run is still active, this page will update as status changes.
+              No results yet. If your search is still running, results will appear here automatically.
             </CardContent>
           </Card>
         ) : (
@@ -269,7 +273,7 @@ export default async function BriefDetailPage({
             {results.length < 5 ? (
               <Card>
                 <CardContent className="pt-6 text-sm text-muted-foreground">
-                  Fewer than 5 results were found. Consider relaxing constraints or widening geography.
+                  Fewer than 5 matches found. Try broadening your requirements or location.
                 </CardContent>
               </Card>
             ) : null}

@@ -1,9 +1,15 @@
 import { randomUUID } from "node:crypto"
 
-import { NextResponse } from "next/server"
+import { after, NextResponse } from "next/server"
 
+import {
+  contextAwareFallback,
+  normalizeQuestionPayload,
+  salvagePartialQuestions,
+} from "@/lib/clarifications"
 import { MODELS, parseSearchDepth } from "@/lib/constants"
-import { callOpenRouter } from "@/lib/openrouter"
+import { coerceNormalizedBrief } from "@/lib/brief-coerce"
+import { callOpenRouterWithTimeout } from "@/lib/openrouter-with-timeout"
 import { runPipeline } from "@/lib/pipeline/orchestrator"
 import { NormalizedBriefSchema, QuestionsPayloadSchema, RerunOverridesSchema } from "@/lib/schemas"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -15,224 +21,13 @@ type StartInput = {
   overrides?: unknown
 }
 
+type ClarificationGenerationResult = {
+  payload: QuestionsPayload
+  method: "llm" | "fallback"
+  error?: string
+}
+
 export const maxDuration = 300
-
-function parseNumberLike(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value
-  if (typeof value !== "string") return null
-  const cleaned = value.trim().toLowerCase()
-  if (!cleaned) return null
-
-  const suffixMatch = cleaned.match(/^([0-9,.]+)\s*([km])$/)
-  if (suffixMatch) {
-    const base = Number(suffixMatch[1].replaceAll(",", ""))
-    if (!Number.isFinite(base)) return null
-    const multiplier = suffixMatch[2] === "m" ? 1_000_000 : 1_000
-    return base * multiplier
-  }
-
-  const numeric = Number(cleaned.replace(/[^0-9.]/g, ""))
-  return Number.isFinite(numeric) ? numeric : null
-}
-
-function parseStringList(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .filter((entry): entry is string => typeof entry === "string")
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-  }
-  if (typeof value === "string") {
-    return value
-      .split(/[\n,;|]/)
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-  }
-  return []
-}
-
-function parseBudgetRange(value: unknown): { min: number; max: number; currency: string } {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    const maybe = value as { min?: unknown; max?: unknown; currency?: unknown }
-    const min = parseNumberLike(maybe.min) ?? 10000
-    const max = parseNumberLike(maybe.max) ?? Math.max(min, 100000)
-    const currency =
-      typeof maybe.currency === "string" && maybe.currency.trim().length > 0
-        ? maybe.currency.trim().toUpperCase()
-        : "USD"
-    return { min: Math.max(0, min), max: Math.max(min, max), currency }
-  }
-
-  if (typeof value === "string") {
-    const matches = value.match(/([0-9][0-9,]*(?:\.[0-9]+)?\s*[km]?)/gi) ?? []
-    const parsed = matches
-      .map((entry) => parseNumberLike(entry))
-      .filter((entry): entry is number => entry !== null)
-    if (parsed.length >= 2) {
-      const min = Math.min(parsed[0], parsed[1])
-      const max = Math.max(parsed[0], parsed[1])
-      return { min, max, currency: /eur/i.test(value) ? "EUR" : "USD" }
-    }
-    if (parsed.length === 1) {
-      return { min: parsed[0], max: parsed[0] * 5, currency: /eur/i.test(value) ? "EUR" : "USD" }
-    }
-  }
-
-  return { min: 10000, max: 100000, currency: "USD" }
-}
-
-function parseTimeline(value: unknown): {
-  type: "deadline" | "duration"
-  start_date?: string
-  deadline?: string
-  duration?: string
-} {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    const maybe = value as {
-      type?: unknown
-      start_date?: unknown
-      deadline?: unknown
-      duration?: unknown
-    }
-    const type = maybe.type === "deadline" ? "deadline" : "duration"
-    return {
-      type,
-      start_date: typeof maybe.start_date === "string" ? maybe.start_date : undefined,
-      deadline: typeof maybe.deadline === "string" ? maybe.deadline : undefined,
-      duration: typeof maybe.duration === "string" ? maybe.duration : undefined,
-    }
-  }
-
-  if (typeof value === "string" && value.trim().length > 0) {
-    return { type: "duration", duration: value.trim() }
-  }
-
-  return { type: "duration", duration: "3 months" }
-}
-
-function parseGeography(value: unknown): { region: string; remote_ok: boolean } {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    const maybe = value as { region?: unknown; remote_ok?: unknown }
-    return {
-      region:
-        typeof maybe.region === "string" && maybe.region.trim().length > 0
-          ? maybe.region.trim()
-          : "Global",
-      remote_ok: typeof maybe.remote_ok === "boolean" ? maybe.remote_ok : true,
-    }
-  }
-  if (typeof value === "string" && value.trim().length > 0) {
-    return { region: value.trim(), remote_ok: true }
-  }
-  return { region: "Global", remote_ok: true }
-}
-
-function parseObjectLike(value: unknown): Record<string, unknown> | null {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>
-  }
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value) as unknown
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed as Record<string, unknown>
-      }
-    } catch {
-      return null
-    }
-  }
-  return null
-}
-
-function coerceNormalizedBrief(raw: unknown): NormalizedBrief | null {
-  const direct = NormalizedBriefSchema.safeParse(raw)
-  if (direct.success) return direct.data
-
-  const objectLike = parseObjectLike(raw)
-  if (!objectLike) return null
-
-  const fallback = {
-    service_type:
-      typeof objectLike.service_type === "string" && objectLike.service_type.trim().length > 0
-        ? objectLike.service_type.trim()
-        : "b2b service provider",
-    budget_range: parseBudgetRange(objectLike.budget_range),
-    timeline: parseTimeline(objectLike.timeline),
-    industry: parseStringList(objectLike.industry).slice(0, 8),
-    geography: parseGeography(objectLike.geography),
-    constraints: parseStringList(objectLike.constraints).slice(0, 20),
-    optional:
-      objectLike.optional && typeof objectLike.optional === "object" && !Array.isArray(objectLike.optional)
-        ? objectLike.optional
-        : {},
-  }
-
-  if (fallback.industry.length === 0) {
-    fallback.industry = ["general b2b"]
-  }
-
-  const reparsed = NormalizedBriefSchema.safeParse(fallback)
-  return reparsed.success ? reparsed.data : null
-}
-
-function dedupeOptions(values: Array<string | null | undefined>, fallback: string[]): string[] {
-  const cleaned = [...new Set(
-    values
-      .map((value) => value?.trim())
-      .filter((value): value is string => Boolean(value)),
-  )]
-  if (cleaned.length >= 2) return cleaned
-
-  for (const option of fallback) {
-    if (!cleaned.includes(option)) cleaned.push(option)
-    if (cleaned.length >= 2) break
-  }
-
-  return cleaned
-}
-
-function fallbackClarifications(brief: NormalizedBrief): QuestionsPayload {
-  return {
-    type: "connexa.clarifications.v1",
-    questions: [
-      {
-        id: "priority_focus",
-        prompt: "What is the most important selection criterion?",
-        type: "multiple_choice",
-        options: ["Specialized expertise", "Lower cost", "Faster timeline", "Industry experience"],
-        allowOther: false,
-        required: true,
-        fieldPath: "optional.priority_focus",
-        priority: "high",
-      },
-      {
-        id: "additional_context",
-        prompt: "Any additional context we should factor in?",
-        type: "text",
-        allowOther: false,
-        required: false,
-        fieldPath: "optional.additional_context",
-        priority: "medium",
-        validation: {
-          maxLength: 500,
-        },
-      },
-      {
-        id: "geo_preference",
-        prompt: "Preferred provider geography",
-        type: "select",
-        options: dedupeOptions(
-          [brief.geography.region, "United States", "North America", "Europe", "Global"],
-          ["Any region", "Global"],
-        ),
-        allowOther: false,
-        required: false,
-        fieldPath: "geography.region",
-        priority: "medium",
-      },
-    ],
-  }
-}
 
 function withOverrides(normalized: NormalizedBrief, overrides: RerunOverrides | null): NormalizedBrief {
   if (!overrides) return normalized
@@ -242,12 +37,14 @@ function withOverrides(normalized: NormalizedBrief, overrides: RerunOverrides | 
   if (Array.isArray(overrides.constraints)) {
     next.constraints = overrides.constraints
   }
+
   if (typeof overrides.geography_region === "string") {
     next.geography = {
       ...next.geography,
       region: overrides.geography_region,
     }
   }
+
   if (typeof overrides.search_depth === "string") {
     next.optional = {
       ...next.optional,
@@ -258,16 +55,20 @@ function withOverrides(normalized: NormalizedBrief, overrides: RerunOverrides | 
   return NormalizedBriefSchema.parse(next)
 }
 
-async function generateClarifications(
+async function generateClarificationsWithModel(
   normalized: NormalizedBrief,
   prompt: string | null,
-): Promise<QuestionsPayload> {
+): Promise<ClarificationGenerationResult> {
   if (!process.env.OPENROUTER_API_KEY) {
-    return fallbackClarifications(normalized)
+    return {
+      payload: contextAwareFallback(normalized, 0.84),
+      method: "fallback",
+      error: "No API key",
+    }
   }
 
   try {
-    const response = await callOpenRouter(
+    const response = await callOpenRouterWithTimeout(
       [
         {
           role: "system",
@@ -308,14 +109,46 @@ Rules:
         },
       ],
       {
-        model: MODELS.WEAK,
+        model: MODELS.CHEAP,
         response_format: { type: "json_object" },
+        timeoutMs: 15_000,
+        retries: 1,
       },
     )
 
-    return QuestionsPayloadSchema.parse(JSON.parse(response))
-  } catch {
-    return fallbackClarifications(normalized)
+    const parsed = JSON.parse(response) as unknown
+    const validated = QuestionsPayloadSchema.safeParse(parsed)
+
+    if (!validated.success) {
+      console.warn("[clarify]", "LLM response failed validation", validated.error.message)
+      const salvaged = salvagePartialQuestions(parsed, normalized, 0.84)
+      if (salvaged) {
+        return {
+          payload: salvaged,
+          method: "llm",
+          error: "Partial validation failed; salvaged questions.",
+        }
+      }
+
+      return {
+        payload: contextAwareFallback(normalized, 0.84),
+        method: "fallback",
+        error: "Validation failed",
+      }
+    }
+
+    return {
+      payload: normalizeQuestionPayload(validated.data),
+      method: "llm",
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown LLM error"
+    console.warn("[clarify]", "LLM call failed", message)
+    return {
+      payload: contextAwareFallback(normalized, 0.84),
+      method: "fallback",
+      error: message,
+    }
   }
 }
 
@@ -325,9 +158,8 @@ export async function POST(request: Request) {
     if (!body.brief_id) {
       return NextResponse.json({ error: "brief_id is required." }, { status: 400 })
     }
-    const overridesResult = body.overrides
-      ? RerunOverridesSchema.safeParse(body.overrides)
-      : null
+
+    const overridesResult = body.overrides ? RerunOverridesSchema.safeParse(body.overrides) : null
     if (overridesResult && !overridesResult.success) {
       return NextResponse.json({ error: "Invalid rerun overrides." }, { status: 400 })
     }
@@ -339,15 +171,34 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { data: brief, error: briefError } = await supabase
-      .from("briefs")
-      .select("id, status, raw_prompt, normalized_brief")
-      .eq("id", body.brief_id)
-      .eq("user_id", user.id)
-      .single()
+    const [{ data: profile }, { data: brief, error: briefError }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("search_credits_remaining, search_credits_purchased")
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("briefs")
+        .select("id, status, raw_prompt, normalized_brief")
+        .eq("id", body.brief_id)
+        .eq("user_id", user.id)
+        .single(),
+    ])
 
     if (briefError || !brief) {
       return NextResponse.json({ error: "Brief not found." }, { status: 404 })
+    }
+
+    const creditsRemaining =
+      typeof profile?.search_credits_remaining === "number" ? profile.search_credits_remaining : -1
+    if (creditsRemaining === 0) {
+      return NextResponse.json(
+        {
+          error: "No search credits remaining. Purchase additional credits to continue.",
+          credits_exhausted: true,
+        },
+        { status: 402 },
+      )
     }
 
     const parsedNormalized = coerceNormalizedBrief(brief.normalized_brief)
@@ -358,7 +209,12 @@ export async function POST(request: Request) {
       )
     }
 
-    if (brief.status !== "draft" && brief.status !== "complete" && brief.status !== "failed" && brief.status !== "cancelled") {
+    if (
+      brief.status !== "draft" &&
+      brief.status !== "complete" &&
+      brief.status !== "error" &&
+      brief.status !== "cancelled"
+    ) {
       return NextResponse.json(
         { error: "Brief must be completed, failed, or cancelled before re-running." },
         { status: 400 },
@@ -369,6 +225,18 @@ export async function POST(request: Request) {
     const normalizedWithOverrides = withOverrides(parsedNormalized, overrides)
     const optional = normalizedWithOverrides.optional as Record<string, unknown>
     const searchDepth = parseSearchDepth(optional.search_depth)
+
+    console.info(
+      "[pipeline:start]",
+      JSON.stringify({
+        event: "pipeline_start",
+        brief_id: body.brief_id,
+        has_overrides: Boolean(overrides),
+        force_clarify: Boolean(overrides?.force_clarify),
+        search_depth: searchDepth,
+        credits_remaining: creditsRemaining,
+      }),
+    )
 
     const { error: briefUpdateError } = await admin
       .from("briefs")
@@ -381,11 +249,11 @@ export async function POST(request: Request) {
     }
 
     if (overrides?.force_clarify) {
-      const payload = await generateClarifications(normalizedWithOverrides, brief.raw_prompt)
+      const generated = await generateClarificationsWithModel(normalizedWithOverrides, brief.raw_prompt)
 
       const { error: questionError } = await admin.from("brief_questions").insert({
         brief_id: body.brief_id,
-        questions: payload,
+        questions: generated.payload,
         confidence_before: 0.84,
       })
       if (questionError) {
@@ -400,11 +268,52 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: clarifyStatusError.message }, { status: 500 })
       }
 
+      console.info(
+        "[clarify]",
+        JSON.stringify({
+          event: "clarify_complete",
+          brief_id: body.brief_id,
+          method: generated.method,
+          fell_back: generated.method === "fallback",
+          error: generated.error ?? null,
+          question_count: generated.payload.questions.length,
+          used_cache: false,
+          confidence: 0.84,
+        }),
+      )
+
       return NextResponse.json({
         clarify_required: true,
         brief_id: body.brief_id,
-        questions: payload,
+        questions: generated.payload,
       })
+    }
+
+    let nextCredits = creditsRemaining
+    if (creditsRemaining > 0) {
+      const { data: decrementedProfile, error: decrementError } = await admin
+        .from("profiles")
+        .update({
+          search_credits_remaining: creditsRemaining - 1,
+          search_credits_purchased: profile?.search_credits_purchased ?? 0,
+        })
+        .eq("id", user.id)
+        .eq("search_credits_remaining", creditsRemaining)
+        .select("search_credits_remaining")
+        .maybeSingle()
+
+      if (decrementError) {
+        return NextResponse.json({ error: decrementError.message }, { status: 500 })
+      }
+
+      if (!decrementedProfile) {
+        return NextResponse.json(
+          { error: "Search credits changed. Please refresh and try again." },
+          { status: 409 },
+        )
+      }
+
+      nextCredits = decrementedProfile.search_credits_remaining ?? creditsRemaining - 1
     }
 
     const runId = randomUUID()
@@ -424,9 +333,10 @@ export async function POST(request: Request) {
       .eq("id", body.brief_id)
     if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
-    void runPipeline(body.brief_id, runId, { searchDepth })
+    const briefId = body.brief_id
+    after(() => runPipeline(briefId, runId, { searchDepth }))
 
-    return NextResponse.json({ run_id: runId })
+    return NextResponse.json({ run_id: runId, remaining_credits: nextCredits })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to start pipeline."
     return NextResponse.json({ error: message }, { status: 500 })

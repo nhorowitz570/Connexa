@@ -21,6 +21,7 @@ type ThreadListProps = {
   onSelect: (threadId: string) => void
   onNewThread: () => void
   onDelete: (threadId: string) => Promise<void>
+  newThreadDisabled?: boolean
 }
 
 export function ThreadList({
@@ -29,6 +30,7 @@ export function ThreadList({
   onSelect,
   onNewThread,
   onDelete,
+  newThreadDisabled = false,
 }: ThreadListProps) {
   const [pendingDeleteThreadId, setPendingDeleteThreadId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -37,9 +39,13 @@ export function ThreadList({
 
   return (
     <>
-      <aside className="flex h-full flex-col border-r border-[#30363D] bg-[#161B22]">
-        <div className="border-b border-[#30363D] p-3">
-          <Button className="w-full" onClick={onNewThread}>
+      <aside className="glass-card flex h-full flex-col rounded-2xl border border-white/10 bg-[#111928]/70">
+        <div className="border-b border-white/10 p-3">
+          <Button
+            className="h-11 w-full rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-[#3b3f46] disabled:text-[#a3a3a3]"
+            onClick={onNewThread}
+            disabled={newThreadDisabled}
+          >
             <MessageSquarePlus className="mr-2 h-4 w-4" />
             New Chat
           </Button>
@@ -52,15 +58,15 @@ export function ThreadList({
             threads.map((thread) => {
               const active = thread.id === activeThreadId
               return (
-                <div key={thread.id} className="group flex items-center gap-1 rounded-md">
+                <div key={thread.id} className="group flex items-center gap-1 rounded-lg">
                   <button
                     type="button"
                     onClick={() => onSelect(thread.id)}
                     className={cn(
-                      "min-w-0 flex-1 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                      "min-h-11 min-w-0 flex-1 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
                       active
-                        ? "bg-[#1F1F1F] text-white"
-                        : "hover:bg-[#1A1A1A] text-[#919191] hover:text-white",
+                        ? "border-indigo-400/50 bg-indigo-500/15 text-white"
+                        : "border-transparent text-[#919191] hover:border-white/10 hover:bg-white/5 hover:text-white",
                     )}
                   >
                     <p className="truncate font-medium">{thread.title}</p>
@@ -72,7 +78,7 @@ export function ThreadList({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-[#919191] opacity-100 transition-opacity hover:text-destructive md:opacity-0 md:group-hover:opacity-100"
+                    className="h-8 w-8 text-[#919191] opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
                     onClick={() => setPendingDeleteThreadId(thread.id)}
                     aria-label={`Delete ${thread.title}`}
                   >

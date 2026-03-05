@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Loader2 } from "lucide-react"
+import { Loader2, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { BriefStatusBadge } from "@/components/brief/brief-status-badge"
@@ -15,6 +15,15 @@ import { ResultCard } from "@/components/results/result-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import {
   Sheet,
   SheetContent,
@@ -31,6 +40,7 @@ type BriefSlideOverProps = {
   briefId: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  onBriefDeleted?: (briefId: string) => void
 }
 
 type BriefRow = {
@@ -86,13 +96,13 @@ function parseResultRow(row: {
       row.score_breakdown && typeof row.score_breakdown === "object"
         ? row.score_breakdown
         : {
-            service_match: 0,
-            budget_fit: 0,
-            industry_fit: 0,
-            timeline_fit: 0,
-            geo_fit: 0,
-            constraint_fit: 0,
-          },
+          service_match: 0,
+          budget_fit: 0,
+          industry_fit: 0,
+          timeline_fit: 0,
+          geo_fit: 0,
+          constraint_fit: 0,
+        },
     reasoning_summary: row.reasoning_summary,
     reasoning_detailed:
       row.reasoning_detailed && typeof row.reasoning_detailed === "object"
@@ -104,11 +114,42 @@ function parseResultRow(row: {
   return parsed.success ? parsed.data : null
 }
 
-export function BriefSlideOver({ briefId, open, onOpenChange }: BriefSlideOverProps) {
+export function BriefSlideOver({ briefId, open, onOpenChange, onBriefDeleted }: BriefSlideOverProps) {
   const [loading, setLoading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [brief, setBrief] = useState<BriefRow | null>(null)
   const [latestRun, setLatestRun] = useState<RunRow | null>(null)
   const [results, setResults] = useState<ScoredResult[]>([])
+
+  const handleDeleteBrief = async () => {
+    if (!brief || deleting) return
+
+    setDeleting(true)
+    try {
+      const response = await fetch(`/api/brief/${brief.id}`, {
+        method: "DELETE",
+      })
+      const payload = (await response.json().catch(() => ({}))) as {
+        data?: { deleted: boolean }
+        error?: string
+      }
+
+      if (!response.ok || !payload.data?.deleted) {
+        throw new Error(payload.error ?? "Failed to delete brief.")
+      }
+
+      toast.success("Brief deleted.")
+      setConfirmDeleteOpen(false)
+      onBriefDeleted?.(brief.id)
+      onOpenChange(false)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete brief."
+      toast.error(message)
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const loadBriefData = useCallback(async () => {
     if (!briefId) return
@@ -157,19 +198,19 @@ export function BriefSlideOver({ briefId, open, onOpenChange }: BriefSlideOverPr
 
       const nextRun = runData
         ? {
-            id: runData.id,
-            status: runData.status,
-            confidence_overall: runData.confidence_overall,
-            notes: Array.isArray(runData.notes)
-              ? runData.notes.filter((value): value is string => typeof value === "string")
-              : [],
-            search_queries: Array.isArray(runData.search_queries)
-              ? runData.search_queries.filter((value): value is string => typeof value === "string")
-              : [],
-            started_at: runData.started_at,
-            completed_at: runData.completed_at,
-            created_at: runData.created_at,
-          }
+          id: runData.id,
+          status: runData.status,
+          confidence_overall: runData.confidence_overall,
+          notes: Array.isArray(runData.notes)
+            ? runData.notes.filter((value): value is string => typeof value === "string")
+            : [],
+          search_queries: Array.isArray(runData.search_queries)
+            ? runData.search_queries.filter((value): value is string => typeof value === "string")
+            : [],
+          started_at: runData.started_at,
+          completed_at: runData.completed_at,
+          created_at: runData.created_at,
+        }
         : null
       setLatestRun(nextRun)
 
@@ -282,13 +323,13 @@ export function BriefSlideOver({ briefId, open, onOpenChange }: BriefSlideOverPr
                     run={
                       latestRun
                         ? {
-                            id: latestRun.id,
-                            status: latestRun.status,
-                            confidence_overall: latestRun.confidence_overall,
-                            notes: latestRun.notes,
-                            search_queries: latestRun.search_queries,
-                            created_at: latestRun.created_at,
-                          }
+                          id: latestRun.id,
+                          status: latestRun.status,
+                          confidence_overall: latestRun.confidence_overall,
+                          notes: latestRun.notes,
+                          search_queries: latestRun.search_queries,
+                          created_at: latestRun.created_at,
+                        }
                         : null
                     }
                     results={results.map((result) => ({
@@ -313,6 +354,34 @@ export function BriefSlideOver({ briefId, open, onOpenChange }: BriefSlideOverPr
                   {brief.status === "running" ? (
                     <CancelBriefButton briefId={brief.id} onCancelled={() => void loadBriefData()} />
                   ) : null}
+                  <Dialog open={confirmDeleteOpen} onOpenChange={(nextOpen) => {
+                    if (!deleting) {
+                      setConfirmDeleteOpen(nextOpen)
+                    }
+                  }}>
+                    <DialogTrigger asChild>
+                      <Button variant="destructive" disabled={deleting}>
+                        <Trash2 className="h-4 w-4" />
+                        Delete Brief
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Delete brief?</DialogTitle>
+                        <DialogDescription>
+                          This action cannot be undone. The brief, run history, and results will be permanently removed.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirmDeleteOpen(false)} disabled={deleting}>
+                          Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={() => void handleDeleteBrief()} disabled={deleting}>
+                          {deleting ? "Deleting..." : "Confirm Delete"}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
 
                 <Card className="border-[#1F1F1F] bg-[#111]">
@@ -326,6 +395,8 @@ export function BriefSlideOver({ briefId, open, onOpenChange }: BriefSlideOverPr
 
                 {latestRun ? (
                   <RunStatusPoller
+                    briefId={brief.id}
+                    normalizedBrief={normalizedBrief?.success ? normalizedBrief.data : brief.normalized_brief}
                     runId={latestRun.id}
                     initialStatus={latestRun.status}
                     initialConfidence={latestRun.confidence_overall}

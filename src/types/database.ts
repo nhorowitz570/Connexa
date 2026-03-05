@@ -14,18 +14,39 @@ export type Database = {
           id: string
           email: string
           full_name: string | null
+          theme_preference: string | null
+          ai_search_depth: string | null
+          ai_auto_clarify: boolean | null
+          connected_accounts: Json | null
+          plan: string | null
+          search_credits_remaining: number | null
+          search_credits_purchased: number | null
           created_at: string
         }
         Insert: {
           id: string
           email: string
           full_name?: string | null
+          theme_preference?: string | null
+          ai_search_depth?: string | null
+          ai_auto_clarify?: boolean | null
+          connected_accounts?: Json | null
+          plan?: string | null
+          search_credits_remaining?: number | null
+          search_credits_purchased?: number | null
           created_at?: string
         }
         Update: {
           id?: string
           email?: string
           full_name?: string | null
+          theme_preference?: string | null
+          ai_search_depth?: string | null
+          ai_auto_clarify?: boolean | null
+          connected_accounts?: Json | null
+          plan?: string | null
+          search_credits_remaining?: number | null
+          search_credits_purchased?: number | null
           created_at?: string
         }
       }
@@ -39,7 +60,7 @@ export type Database = {
           category: string | null
           normalized_brief: Json | null
           weights: Json | null
-          status: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
+          status: "draft" | "clarifying" | "running" | "complete" | "error" | "cancelled"
           created_at: string
           updated_at: string
         }
@@ -52,7 +73,7 @@ export type Database = {
           category?: string | null
           normalized_brief?: Json | null
           weights?: Json | null
-          status?: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
+          status?: "draft" | "clarifying" | "running" | "complete" | "error" | "cancelled"
           created_at?: string
           updated_at?: string
         }
@@ -65,7 +86,7 @@ export type Database = {
           category?: string | null
           normalized_brief?: Json | null
           weights?: Json | null
-          status?: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
+          status?: "draft" | "clarifying" | "running" | "complete" | "error" | "cancelled"
           created_at?: string
           updated_at?: string
         }
@@ -100,7 +121,7 @@ export type Database = {
         Row: {
           id: string
           brief_id: string
-          status: "running" | "complete" | "failed" | "cancelled"
+          status: "running" | "complete" | "error" | "cancelled"
           confidence_overall: number | null
           notes: Json | null
           search_queries: Json | null
@@ -112,7 +133,7 @@ export type Database = {
         Insert: {
           id?: string
           brief_id: string
-          status?: "running" | "complete" | "failed" | "cancelled"
+          status?: "running" | "complete" | "error" | "cancelled"
           confidence_overall?: number | null
           notes?: Json | null
           search_queries?: Json | null
@@ -124,7 +145,7 @@ export type Database = {
         Update: {
           id?: string
           brief_id?: string
-          status?: "running" | "complete" | "failed" | "cancelled"
+          status?: "running" | "complete" | "error" | "cancelled"
           confidence_overall?: number | null
           notes?: Json | null
           search_queries?: Json | null
@@ -321,13 +342,48 @@ export type Database = {
           created_at?: string
         }
       }
+      search_purchases: {
+        Row: {
+          id: string
+          user_id: string
+          credits: number
+          amount_cents: number
+          currency: string
+          status: string
+          payment_intent_id: string | null
+          created_at: string
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          credits: number
+          amount_cents: number
+          currency?: string
+          status?: string
+          payment_intent_id?: string | null
+          created_at?: string
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          credits?: number
+          amount_cents?: number
+          currency?: string
+          status?: string
+          payment_intent_id?: string | null
+          created_at?: string
+          completed_at?: string | null
+        }
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
     Enums: {
       brief_mode: "simple" | "detailed"
-      brief_status: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
-      run_status: "running" | "complete" | "failed" | "cancelled"
+      brief_status: "draft" | "clarifying" | "running" | "complete" | "error" | "cancelled"
+      run_status: "running" | "complete" | "error" | "cancelled"
     }
     CompositeTypes: Record<string, never>
   }

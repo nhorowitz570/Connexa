@@ -8,6 +8,8 @@ type EvidencePage = {
   raw_content: string
 }
 
+const EXTRACT_CONCURRENCY = 5
+
 function groupByDomain(pages: EvidencePage[]): Record<string, EvidencePage[]> {
   return pages.reduce<Record<string, EvidencePage[]>>((acc, page) => {
     try {
@@ -41,29 +43,25 @@ function fallbackCandidateFromDomain(domain: string, pages: EvidencePage[]): Can
   }
 }
 
-export async function extractCandidates(
-  evidence: EvidencePage[],
+async function extractSingleDomain(
+  domain: string,
+  pages: EvidencePage[],
   brief: NormalizedBrief,
-): Promise<Candidate[]> {
-  const byDomain = groupByDomain(evidence)
-  const candidates: Candidate[] = []
+): Promise<Candidate> {
+  if (!process.env.OPENROUTER_API_KEY) {
+    return fallbackCandidateFromDomain(domain, pages)
+  }
 
-  for (const [domain, pages] of Object.entries(byDomain)) {
-    try {
-      if (!process.env.OPENROUTER_API_KEY) {
-        candidates.push(fallbackCandidateFromDomain(domain, pages))
-        continue
-      }
+  try {
+    const context = pages
+      .map((page) => `URL: ${page.url}\n${page.raw_content.slice(0, 5000)}`)
+      .join("\n---\n")
 
-      const context = pages
-        .map((page) => `URL: ${page.url}\n${page.raw_content.slice(0, 5000)}`)
-        .join("\n---\n")
-
-      const response = await callOpenRouter(
-        [
-          {
-            role: "system",
-            content: `Extract structured provider information from these web pages.
+    const response = await callOpenRouter(
+      [
+        {
+          role: "system",
+          content: `Extract structured provider information from these web pages.
 Only include explicitly stated facts. Return JSON with:
 {
   company_name, website_url, services: [], industries: [],
@@ -78,27 +76,51 @@ Set extraction_confidence between 0 and 1 using this rubric:
 - 0.5-0.69: company name confirmed, services partially inferred
 - 0.3-0.49: most fields inferred from limited evidence
 - 0.0-0.29: very limited evidence found`,
-          },
-          {
-            role: "user",
-            content: `Brief: ${JSON.stringify(brief)}\n\nPages:\n${context}`,
-          },
-        ],
-        {
-          model: MODELS.WEAK,
-          response_format: { type: "json_object" },
-          max_tokens: 1500,
         },
-      )
+        {
+          role: "user",
+          content: `Brief: ${JSON.stringify(brief)}\n\nPages:\n${context}`,
+        },
+      ],
+      {
+        model: MODELS.WEAK,
+        response_format: { type: "json_object" },
+        max_tokens: 1500,
+      },
+    )
 
-      const candidate = CandidateSchema.safeParse(JSON.parse(response))
-      if (candidate.success) {
-        candidates.push(candidate.data)
-      } else {
-        candidates.push(fallbackCandidateFromDomain(domain, pages))
+    const candidate = CandidateSchema.safeParse(JSON.parse(response))
+    if (candidate.success) {
+      return candidate.data
+    }
+    return fallbackCandidateFromDomain(domain, pages)
+  } catch {
+    return fallbackCandidateFromDomain(domain, pages)
+  }
+}
+
+export async function extractCandidates(
+  evidence: EvidencePage[],
+  brief: NormalizedBrief,
+): Promise<Candidate[]> {
+  const byDomain = groupByDomain(evidence)
+  const domainEntries = Object.entries(byDomain)
+
+  if (domainEntries.length === 0) return []
+
+  const candidates: Candidate[] = []
+
+  // Process domains in parallel batches of EXTRACT_CONCURRENCY
+  for (let i = 0; i < domainEntries.length; i += EXTRACT_CONCURRENCY) {
+    const batch = domainEntries.slice(i, i + EXTRACT_CONCURRENCY)
+    const results = await Promise.allSettled(
+      batch.map(([domain, pages]) => extractSingleDomain(domain, pages, brief)),
+    )
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        candidates.push(result.value)
       }
-    } catch {
-      candidates.push(fallbackCandidateFromDomain(domain, pages))
     }
   }
 

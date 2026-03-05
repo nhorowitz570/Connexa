@@ -24,6 +24,28 @@ export type ShortlistPayload = z.infer<typeof ShortlistPayloadSchema>
 export type NormalizeResponse = z.infer<typeof NormalizeResponseSchema>
 export type RerunOverrides = z.infer<typeof RerunOverridesSchema>
 
+export type ConnectedAccount = {
+  connected: boolean
+  email?: string | null
+  username?: string | null
+  connected_at?: string
+  scopes?: string[]
+  token_encrypted?: string
+  available?: boolean
+}
+
+export type ConnectedAccounts = {
+  google?: ConnectedAccount
+  fiverr?: ConnectedAccount
+  upwork?: ConnectedAccount
+}
+
+export type CreditPackage = {
+  credits: number
+  price_cents: number
+  label: string
+}
+
 export type BriefMode = "simple" | "detailed"
-export type BriefStatus = "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
-export type RunStatus = "running" | "complete" | "failed" | "cancelled"
+export type BriefStatus = "draft" | "clarifying" | "running" | "complete" | "error" | "cancelled"
+export type RunStatus = "running" | "complete" | "error" | "cancelled"

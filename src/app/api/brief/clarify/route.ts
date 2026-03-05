@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server"
 
 import { MODELS } from "@/lib/constants"
-import { callOpenRouter } from "@/lib/openrouter"
+import {
+  contextAwareFallback,
+  normalizeQuestionPayload,
+  salvagePartialQuestions,
+} from "@/lib/clarifications"
+import { callOpenRouterWithTimeout } from "@/lib/openrouter-with-timeout"
 import { NormalizedBriefSchema, QuestionsPayloadSchema } from "@/lib/schemas"
 import { createClient } from "@/lib/supabase/server"
 import type { NormalizedBrief, QuestionsPayload } from "@/types"
@@ -12,82 +17,26 @@ type ClarifyInput = {
   brief_id?: string
 }
 
-function normalizeOptions(options: unknown, fallback: string[] = []): string[] {
-  const deduped = Array.isArray(options)
-    ? [...new Set(options.filter((value): value is string => typeof value === "string").map((value) => value.trim()).filter(Boolean))]
-    : []
-
-  if (deduped.length >= 2) return deduped
-
-  for (const option of fallback) {
-    if (!deduped.includes(option)) deduped.push(option)
-    if (deduped.length >= 2) break
-  }
-  return deduped
-}
-
-function fallbackClarifications(): QuestionsPayload {
-  return {
-    type: "connexa.clarifications.v1",
-    questions: [
-      {
-        id: "priority_focus",
-        prompt: "What is the most important selection criteria?",
-        type: "multiple_choice",
-        options: normalizeOptions(
-          ["Specialized expertise", "Lower cost", "Faster timeline", "Industry experience"],
-          ["Specialized expertise", "Lower cost"],
-        ),
-        allowOther: false,
-        required: true,
-        helpText: "We will bias rankings toward this priority.",
-        fieldPath: "optional.priority_focus",
-        priority: "high",
-      },
-      {
-        id: "additional_context",
-        prompt: "Any additional context we should factor in?",
-        type: "text",
-        allowOther: false,
-        required: false,
-        helpText: "Optional details like preferred tools, team size, or compliance constraints.",
-        fieldPath: "optional.additional_context",
-        priority: "medium",
-        validation: {
-          maxLength: 500,
-        },
-      },
-    ],
-  }
-}
-
-function normalizeQuestionPayload(payload: QuestionsPayload): QuestionsPayload {
-  const normalized: QuestionsPayload = {
-    type: payload.type,
-    questions: payload.questions.slice(0, 5).map((question) => ({
-      ...question,
-      priority: question.priority ?? "medium",
-      type: question.type ?? "multiple_choice",
-      options:
-        question.type === "multiple_choice" || question.type === "select"
-          ? normalizeOptions(question.options, ["Option A", "Option B"])
-          : question.options,
-    })),
-  }
-
-  return QuestionsPayloadSchema.parse(normalized)
+type ClarificationGenerationResult = {
+  payload: QuestionsPayload
+  method: "llm" | "fallback"
+  error?: string
 }
 
 async function generateClarificationsWithModel(
   normalized: NormalizedBrief,
   confidence: number,
-): Promise<QuestionsPayload> {
+): Promise<ClarificationGenerationResult> {
   if (!process.env.OPENROUTER_API_KEY) {
-    return fallbackClarifications()
+    return {
+      payload: contextAwareFallback(normalized, confidence),
+      method: "fallback",
+      error: "No API key",
+    }
   }
 
   try {
-    const response = await callOpenRouter(
+    const response = await callOpenRouterWithTimeout(
       [
         {
           role: "system",
@@ -132,18 +81,50 @@ Rules:
       {
         model: MODELS.CHEAP,
         response_format: { type: "json_object" },
+        timeoutMs: 15_000,
+        retries: 1,
       },
     )
 
-    const parsed = QuestionsPayloadSchema.parse(JSON.parse(response))
-    return normalizeQuestionPayload(parsed)
-  } catch {
-    return fallbackClarifications()
+    const parsed = JSON.parse(response) as unknown
+    const validated = QuestionsPayloadSchema.safeParse(parsed)
+
+    if (!validated.success) {
+      console.warn("[clarify]", "LLM response failed validation", validated.error.message)
+      const salvaged = salvagePartialQuestions(parsed, normalized, confidence)
+      if (salvaged) {
+        return {
+          payload: salvaged,
+          method: "llm",
+          error: "Partial validation failed; salvaged questions.",
+        }
+      }
+
+      return {
+        payload: contextAwareFallback(normalized, confidence),
+        method: "fallback",
+        error: "Validation failed",
+      }
+    }
+
+    return {
+      payload: normalizeQuestionPayload(validated.data),
+      method: "llm",
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown LLM error"
+    console.warn("[clarify]", "LLM call failed", message)
+    return {
+      payload: contextAwareFallback(normalized, confidence),
+      method: "fallback",
+      error: message,
+    }
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const startTime = Date.now()
     const body = (await request.json()) as ClarifyInput
     if (!body.brief_id || !body.normalized_brief || typeof body.confidence !== "number") {
       return NextResponse.json(
@@ -189,11 +170,29 @@ export async function POST(request: Request) {
       const cachedPayload = QuestionsPayloadSchema.safeParse(cachedRow.questions)
       if (cachedPayload.success) {
         await supabase.from("briefs").update({ status: "clarifying" }).eq("id", body.brief_id)
-        return NextResponse.json(normalizeQuestionPayload(cachedPayload.data))
+        const payload = normalizeQuestionPayload(cachedPayload.data)
+
+        console.info(
+          "[clarify]",
+          JSON.stringify({
+            event: "clarify_complete",
+            duration_ms: Date.now() - startTime,
+            method: "cache",
+            fell_back: false,
+            error: null,
+            question_count: payload.questions.length,
+            used_cache: true,
+            brief_id: body.brief_id,
+            confidence: body.confidence,
+          }),
+        )
+
+        return NextResponse.json(payload)
       }
     }
 
-    const payload = await generateClarificationsWithModel(normalized, body.confidence)
+    const generated = await generateClarificationsWithModel(normalized, body.confidence)
+    const payload = generated.payload
 
     const { error: insertError } = await supabase.from("brief_questions").insert({
       brief_id: body.brief_id,
@@ -211,6 +210,21 @@ export async function POST(request: Request) {
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
+
+    console.info(
+      "[clarify]",
+      JSON.stringify({
+        event: "clarify_complete",
+        duration_ms: Date.now() - startTime,
+        method: generated.method,
+        fell_back: generated.method === "fallback",
+        error: generated.error ?? null,
+        question_count: payload.questions.length,
+        used_cache: false,
+        brief_id: body.brief_id,
+        confidence: body.confidence,
+      }),
+    )
 
     return NextResponse.json(payload)
   } catch (error) {

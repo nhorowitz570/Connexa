@@ -15,7 +15,7 @@ const UUID_PATTERN =
 type HistorySearchParams = {
   page?: string
   mode?: "all" | "simple" | "detailed"
-  status?: "all" | "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
+  status?: "all" | "draft" | "clarifying" | "running" | "complete" | "error" | "cancelled"
   q?: string
 }
 
@@ -26,7 +26,7 @@ type ResultRow = {
 
 type RunSummaryRow = {
   brief_id: string
-  status: "running" | "complete" | "failed" | "cancelled"
+  status: "running" | "complete" | "error" | "cancelled"
   started_at: string | null
   completed_at: string | null
   notes: unknown

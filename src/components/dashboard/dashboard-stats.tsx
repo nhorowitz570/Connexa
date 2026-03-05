@@ -1,53 +1,93 @@
 "use client"
 
-import { FileText } from "lucide-react"
+import { animate, motion, useMotionValue, useTransform } from "framer-motion"
+import { Activity, AlertTriangle, CheckCircle2, Target, Files } from "lucide-react"
+import type { ComponentType } from "react"
+import { useEffect } from "react"
 
 type DashboardStatsProps = {
   totalBriefs: number
   failedBriefs: number
-  runningBriefs: number
+  activeBriefs: number
   averageScore: number | null
 }
 
 export function DashboardStats({
   totalBriefs,
   failedBriefs,
-  runningBriefs,
+  activeBriefs,
   averageScore,
 }: DashboardStatsProps) {
-  const activeBriefs = runningBriefs
-  const completedBriefs = totalBriefs - failedBriefs - runningBriefs
+  const completedBriefs = Math.max(0, totalBriefs - failedBriefs - activeBriefs)
 
   return (
-    <div className="flex flex-col xl:flex-row gap-8 xl:items-center justify-between p-6 bg-[#0D0D0D] rounded-2xl border border-[#1F1F1F] animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 text-[#919191]">
-          <FileText className="h-5 w-5" />
-          <span className="text-lg">Active Briefs</span>
+    <div className="glass-card grid gap-4 rounded-3xl border border-white/10 p-4 sm:p-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+      <motion.div
+        whileHover={{ scale: 1.02 }}
+        className="glass-card-hover rounded-2xl border border-white/10 bg-black/20 p-5"
+      >
+        <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-200">
+          <Activity className="h-5 w-5" />
         </div>
-        <div className="text-5xl md:text-4xl lg:text-5xl font-bold text-white">{activeBriefs}</div>
-      </div>
+        <p className="text-sm text-[#9ca3b4]">Active Briefs</p>
+        <p className="glow-text mt-2 text-5xl font-semibold text-white sm:text-6xl">
+          <AnimatedNumber value={activeBriefs} />
+        </p>
+        <p className="mt-2 text-xs text-[#8a93a8]">Searches currently running or waiting on clarifications</p>
+      </motion.div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-8 xl:gap-16">
-        <div className="flex flex-col gap-1">
-          <span className="text-[#919191] text-sm">Total Briefs</span>
-          <span className="text-2xl md:text-xl lg:text-2xl font-semibold text-white">{totalBriefs}</span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-[#919191] text-sm">Completed</span>
-          <span className="text-2xl md:text-xl lg:text-2xl font-semibold text-indigo-400">{completedBriefs > 0 ? completedBriefs : 0}</span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-[#919191] text-sm">Avg. Score</span>
-          <span className="text-2xl md:text-xl lg:text-2xl font-semibold text-indigo-400">
-            {averageScore !== null ? averageScore.toFixed(1) : "—"}
-          </span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-[#919191] text-sm">Failed</span>
-          <span className="text-2xl md:text-xl lg:text-2xl font-semibold text-red-400">{failedBriefs}</span>
-        </div>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <MetricCard label="Total Briefs" value={totalBriefs} icon={Files} valueClassName="text-white" />
+        <MetricCard label="Completed" value={completedBriefs} icon={CheckCircle2} valueClassName="text-emerald-300" />
+        <MetricCard
+          label="Avg Match Score"
+          value={averageScore !== null ? `${averageScore.toFixed(1)}%` : "-"}
+          icon={Target}
+          valueClassName="text-indigo-300"
+        />
+        <MetricCard label="Failed" value={failedBriefs} icon={AlertTriangle} valueClassName="text-rose-300" />
       </div>
     </div>
+  )
+}
+
+function AnimatedNumber({ value }: { value: number }) {
+  const motionValue = useMotionValue(0)
+  const rounded = useTransform(motionValue, (latest) => Math.round(latest))
+
+  useEffect(() => {
+    const controls = animate(motionValue, value, {
+      duration: 0.8,
+      ease: "easeOut",
+    })
+
+    return () => {
+      controls.stop()
+    }
+  }, [motionValue, value])
+
+  return <motion.span>{rounded}</motion.span>
+}
+
+type MetricCardProps = {
+  label: string
+  value: string | number
+  icon: ComponentType<{ className?: string }>
+  valueClassName: string
+}
+
+function MetricCard({ label, value, icon: Icon, valueClassName }: MetricCardProps) {
+  return (
+    <motion.div
+      whileHover={{ scale: 1.05 }}
+      transition={{ type: "spring", stiffness: 340, damping: 26 }}
+      className="glass-card-hover rounded-2xl border border-white/10 bg-black/20 p-4"
+    >
+      <div className="flex items-center gap-2 text-xs text-[#9ca3b4] sm:text-sm">
+        <Icon className="h-3.5 w-3.5 text-indigo-200" />
+        <span>{label}</span>
+      </div>
+      <p className={`mt-2 text-2xl font-semibold sm:text-3xl ${valueClassName}`}>{value}</p>
+    </motion.div>
   )
 }

@@ -247,8 +247,17 @@ OPENROUTER_API_KEY=               # OpenRouter API key
 OPENROUTER_CHEAP_MODEL=           # Optional: override cheap model (default: openai/gpt-4o-mini)
 OPENROUTER_STRONG_MODEL=          # Optional: override strong model (default: openai/gpt-4o)
 
-# Tavily
-TAVILY_API_KEY=                   # Tavily search API key
+# Exa
+EXA_API_KEY=                      # Exa search API key
+
+# AlterLab
+ALTERLAB_API_KEY=                 # AlterLab API key (web scraping)
+ALTERLAB_BASE_URL=                # Optional AlterLab API base URL (default: https://api.alterlab.io/api/v0)
+
+# Pipeline
+PIPELINE_TIMEOUT_MS=              # Optional global timeout override (ms) for all runs
+PIPELINE_TIMEOUT_MS_STANDARD=     # Optional standard-run timeout override (ms, default: 180000)
+PIPELINE_TIMEOUT_MS_DEEP=         # Optional deep-run timeout override (ms, default: 900000)
 
 # App
 NEXT_PUBLIC_APP_URL=              # Base URL (http://localhost:3000 for dev)

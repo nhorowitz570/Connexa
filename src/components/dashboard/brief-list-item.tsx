@@ -7,7 +7,7 @@ type BriefListItemProps = {
   name: string | null
   serviceType: string
   category: string | null
-  status: "draft" | "clarifying" | "running" | "complete" | "failed" | "cancelled"
+  status: "draft" | "clarifying" | "running" | "complete" | "error" | "cancelled"
   createdAt: string
   score: number | null
   durationLabel?: string | null

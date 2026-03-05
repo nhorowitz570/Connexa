@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
-import { Calendar, Download } from "lucide-react"
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts"
+import { motion } from "framer-motion"
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 
 type ChartRow = { date: string; runs: number }
 
@@ -16,125 +16,115 @@ function rangeToDays(range: Range): number {
 }
 
 export function PerformanceChart() {
-    const [range, setRange] = useState<Range>("30D")
-    const [data, setData] = useState<ChartRow[]>([])
-    const [isPending, startTransition] = useTransition()
+  const [range, setRange] = useState<Range>("30D")
+  const [data, setData] = useState<ChartRow[]>([])
+  const [isPending, startTransition] = useTransition()
 
-    useEffect(() => {
-        const days = rangeToDays(range)
-        const since = new Date()
-        since.setDate(since.getDate() - days + 1)
+  useEffect(() => {
+    const days = rangeToDays(range)
 
-        startTransition(() => {
-            fetch(`/api/analytics/pipeline-activity?days=${days}`)
-                .then((r) => (r.ok ? r.json() : { data: [] }))
-                .then((payload: { data?: ChartRow[] }) => setData(payload.data ?? []))
-                .catch(() => setData([]))
-        })
-    }, [range])
+    startTransition(() => {
+      fetch(`/api/analytics/pipeline-activity?days=${days}`)
+        .then((r) => (r.ok ? r.json() : { data: [] }))
+        .then((payload: { data?: ChartRow[] }) => setData(payload.data ?? []))
+        .catch(() => setData([]))
+    })
+  }, [range])
 
-    const maxRuns = data.length > 0 ? Math.max(...data.map((d) => d.runs), 5) : 5
-    const yMax = Math.ceil(maxRuns / 5) * 5 + 5
+  const maxRuns = data.length > 0 ? Math.max(...data.map((d) => d.runs), 5) : 5
+  const yMax = Math.ceil(maxRuns / 5) * 5 + 5
 
-    return (
-        <div className="flex flex-col gap-6 p-6 bg-[#0D0D0D] rounded-2xl border border-[#1F1F1F] animate-in fade-in duration-500">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 md:gap-2 lg:gap-4 flex-wrap">
-                <div className="flex items-center gap-3">
-                    <h2 className="text-xl font-medium text-white">Discovery Pipeline Activity</h2>
-                </div>
-
-                <div className="flex items-center gap-4 md:gap-2 lg:gap-4">
-                    <div className="flex items-center bg-[#1A1A1A] rounded-lg p-1">
-                        {RANGE_OPTIONS.map((period) => (
-                            <button
-                                key={period}
-                                onClick={() => setRange(period)}
-                                className={`px-3 md:px-2 lg:px-3 py-1 text-sm md:text-xs lg:text-sm rounded-md transition-colors ${period === range
-                                        ? "bg-indigo-600 text-white shadow-sm"
-                                        : "text-[#919191] hover:text-white"
-                                    }`}
-                            >
-                                {period}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <button className="p-2 text-[#919191] hover:text-white bg-[#1A1A1A] rounded-lg transition-colors">
-                            <Calendar className="h-5 w-5" />
-                        </button>
-                        <button className="p-2 text-[#919191] hover:text-white bg-[#1A1A1A] rounded-lg transition-colors">
-                            <Download className="h-5 w-5" />
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div className="flex items-center gap-6 text-sm">
-                <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-indigo-500" />
-                    <span className="text-[#919191]">Active Runs</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-[#919191]">
-                        Brief Activity (Last {rangeToDays(range)} Days)
-                    </span>
-                </div>
-            </div>
-
-            <div className={`h-[340px] w-full transition-opacity duration-300 ${isPending ? "opacity-50" : "opacity-100"}`}>
-                {data.length === 0 && !isPending ? (
-                    <div className="flex items-center justify-center h-full text-[#919191] text-sm">
-                        No pipeline activity in this time range.
-                    </div>
-                ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={data}>
-                            <defs>
-                                <linearGradient id="colorRuns" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#1F1F1F" vertical={false} />
-                            <XAxis dataKey="date" hide />
-                            <YAxis
-                                domain={[0, yMax]}
-                                orientation="left"
-                                tick={{ fill: "#666" }}
-                                axisLine={false}
-                                tickLine={false}
-                            />
-                            <Tooltip
-                                content={({ active, payload }) => {
-                                    if (active && payload && payload.length) {
-                                        return (
-                                            <div className="bg-[#1A1A1A] border border-[#333] p-2 rounded-lg shadow-xl">
-                                                <p className="text-white font-medium">
-                                                    {payload[0].value} runs{" "}
-                                                    <span className="text-[#919191] text-sm ml-2">
-                                                        {payload[0].payload.date}
-                                                    </span>
-                                                </p>
-                                            </div>
-                                        )
-                                    }
-                                    return null
-                                }}
-                            />
-                            <Area
-                                type="monotone"
-                                dataKey="runs"
-                                stroke="#6366f1"
-                                strokeWidth={2}
-                                fillOpacity={1}
-                                fill="url(#colorRuns)"
-                                animationDuration={800}
-                            />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                )}
-            </div>
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
+      className="glass-card rounded-3xl border border-white/10 p-4 sm:p-6"
+    >
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-white sm:text-xl">Search Activity</h2>
+          <p className="text-sm text-[#9ca3b4]">How many discovery runs finished each day</p>
         </div>
-    )
+
+        <div className="flex items-center rounded-xl border border-white/10 bg-black/20 p-1">
+          {RANGE_OPTIONS.map((period) => (
+            <motion.button
+              key={period}
+              onClick={() => setRange(period)}
+              whileTap={{ scale: 0.96 }}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm ${
+                period === range
+                  ? "bg-indigo-500/80 text-white shadow"
+                  : "text-[#9ca3b4] hover:text-white"
+              }`}
+            >
+              {period}
+            </motion.button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-4 hidden items-center gap-6 text-sm text-[#9ca3b4] sm:flex">
+        <div className="flex items-center gap-2">
+          <span className="animate-pulse-glow h-2.5 w-2.5 rounded-full bg-indigo-400" />
+          <span>Completed searches</span>
+        </div>
+        <span>Window: last {rangeToDays(range)} days</span>
+      </div>
+
+      <div className={`h-[250px] w-full transition-opacity duration-300 sm:h-[320px] ${isPending ? "opacity-60" : "opacity-100"}`}>
+        {data.length === 0 && !isPending ? (
+          <div className="flex h-full items-center justify-center text-sm text-[#9ca3b4]">
+            No search activity in this time range.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data}>
+              <defs>
+                <linearGradient id="performance-area" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#6366f1" stopOpacity={0.45} />
+                  <stop offset="90%" stopColor="#6366f1" stopOpacity={0.03} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#243042" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tick={{ fill: "#91a0b8", fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                domain={[0, yMax]}
+                tick={{ fill: "#91a0b8", fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                width={34}
+              />
+              <Tooltip
+                cursor={{ stroke: "#6366f1", strokeOpacity: 0.26 }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null
+                  return (
+                    <div className="rounded-xl border border-white/15 bg-[#0f1624]/95 px-3 py-2 text-sm text-[#d9e0ef] shadow-xl backdrop-blur-xl">
+                      <p className="font-semibold text-white">{payload[0].value} runs</p>
+                      <p className="text-xs text-[#9ca3b4]">{payload[0].payload.date}</p>
+                    </div>
+                  )
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey="runs"
+                stroke="#7c82ff"
+                strokeWidth={2.3}
+                fill="url(#performance-area)"
+                animationDuration={850}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </motion.div>
+  )
 }

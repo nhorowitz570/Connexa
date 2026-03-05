@@ -1,27 +1,36 @@
 "use client"
 
+import { motion } from "framer-motion"
+import { ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { LayoutGrid, FilePlus, Clock, BarChart3, MessageSquare, HelpCircle, Settings2, LogOut } from "lucide-react"
+
 import { createClient } from "@/lib/supabase/client"
+import { cn } from "@/lib/utils"
+
+type SidebarProps = {
+  className?: string
+  onNavigate?: () => void
+}
 
 const navItems = [
-  { id: "dashboard", label: "DASHBOARD", icon: LayoutGrid, href: "/" },
-  { id: "new-brief", label: "NEW BRIEF", icon: FilePlus, href: "/brief/new" },
-  { id: "history", label: "HISTORY", icon: Clock, href: "/history" },
-  { id: "analytics", label: "ANALYTICS", icon: BarChart3, href: "/analytics" },
-  { id: "assistant", label: "ASSISTANT", icon: MessageSquare, href: "/assistant" },
+  { id: "dashboard", label: "Dashboard", icon: LayoutGrid, href: "/" },
+  { id: "new-brief", label: "New Brief", icon: FilePlus, href: "/brief/new" },
+  { id: "history", label: "History", icon: Clock, href: "/history" },
+  { id: "analytics", label: "Analytics", icon: BarChart3, href: "/analytics" },
+  { id: "assistant", label: "Assistant", icon: MessageSquare, href: "/assistant" },
 ]
 
 const bottomItems = [
   {
     id: "help",
-    label: "HELP",
+    label: "Help",
     icon: HelpCircle,
     href: "mailto:feedback@connexa.com?subject=Connexa%20Dashboard%20Feedback",
   },
-  { id: "settings", label: "SETTINGS", icon: Settings2, href: "/settings" },
+  { id: "settings", label: "Settings", icon: Settings2, href: "/settings" },
 ]
 
 function isActive(pathname: string, href: string, id: string) {
@@ -30,7 +39,7 @@ function isActive(pathname: string, href: string, id: string) {
   return pathname.startsWith(href)
 }
 
-export function Sidebar() {
+export function Sidebar({ className, onNavigate }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -47,32 +56,52 @@ export function Sidebar() {
     toast.success("Logged out.")
     router.push("/login")
     router.refresh()
+    onNavigate?.()
   }
 
   return (
-    <aside className="sticky top-24 h-[calc(100vh-8rem)] md:w-48 lg:w-64 bg-[#161B22] rounded-2xl hidden md:flex flex-col p-8 overflow-y-auto no-scrollbar border border-[#30363D]">
-      <nav className="flex flex-col gap-6">
+    <aside
+      className={cn(
+        "glass-card flex flex-col overflow-y-auto rounded-2xl border border-white/10 p-4 no-scrollbar",
+        className,
+      )}
+    >
+      <nav className="flex flex-col gap-1">
         {navItems.map((item) => {
           const active = isActive(pathname, item.href, item.id)
           return (
             <Link
               key={item.id}
               href={item.href}
-              className={`flex items-center gap-4 transition-colors cursor-pointer ${active ? "text-white" : "text-[#919191] hover:text-white"
-                }`}
+              onClick={onNavigate}
+              className={cn(
+                "group relative flex h-11 items-center gap-3 overflow-hidden rounded-xl px-3 text-sm transition-colors",
+                active ? "text-white" : "text-[#9ca3b4] hover:bg-white/5 hover:text-white",
+              )}
             >
-              <item.icon className={`h-5 w-5 ${active ? "text-[#4F6EF7]" : ""}`} />
-              <span className="text-sm font-medium tracking-wide">{item.label}</span>
+              {active ? (
+                <motion.span
+                  layoutId="sidebar-active-indicator"
+                  className="absolute inset-y-1 left-0 w-1 rounded-full bg-indigo-400"
+                  transition={{ type: "spring", stiffness: 420, damping: 36 }}
+                />
+              ) : null}
+              <span className={cn("absolute inset-0 -z-10 rounded-xl", active && "bg-indigo-500/16 shadow-[0_0_0_1px_rgba(99,102,241,0.45)]")} />
+              <item.icon className={cn("h-4 w-4", active ? "text-indigo-300" : "text-[#9ca3b4] group-hover:text-white")} />
+              <span className="font-medium">{item.label}</span>
+              <ChevronRight className="ml-auto h-4 w-4 text-[#7f8798] opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
             </Link>
           )
         })}
       </nav>
 
-      <div className="mt-auto pt-6 border-t border-[#30363D] flex flex-col gap-6">
+      <div className="mt-auto flex flex-col gap-1 border-t border-white/10 pt-4">
         {bottomItems.map((item) => {
           const active = isActive(pathname, item.href, item.id)
-          const classes = `flex items-center gap-4 transition-colors cursor-pointer ${active ? "text-white" : "text-[#919191] hover:text-white"
-            }`
+          const classes = cn(
+            "group relative flex h-11 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
+            active ? "text-white" : "text-[#9ca3b4] hover:bg-white/5 hover:text-white",
+          )
 
           if (item.id === "help") {
             return (
@@ -80,9 +109,11 @@ export function Sidebar() {
                 key={item.id}
                 href={item.href}
                 className={classes}
+                onClick={onNavigate}
               >
-                <item.icon className={`h-5 w-5 ${active ? "text-[#4F6EF7]" : ""}`} />
-                <span className="text-sm font-medium tracking-wide">{item.label}</span>
+                <item.icon className={cn("h-4 w-4", active ? "text-indigo-300" : "text-[#9ca3b4] group-hover:text-white")} />
+                <span className="font-medium">{item.label}</span>
+                <ChevronRight className="ml-auto h-4 w-4 text-[#7f8798] opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
               </a>
             )
           }
@@ -92,9 +123,11 @@ export function Sidebar() {
               key={item.id}
               href={item.href}
               className={classes}
+              onClick={onNavigate}
             >
-              <item.icon className={`h-5 w-5 ${active ? "text-[#4F6EF7]" : ""}`} />
-              <span className="text-sm font-medium tracking-wide">{item.label}</span>
+              <item.icon className={cn("h-4 w-4", active ? "text-indigo-300" : "text-[#9ca3b4] group-hover:text-white")} />
+              <span className="font-medium">{item.label}</span>
+              <ChevronRight className="ml-auto h-4 w-4 text-[#7f8798] opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
             </Link>
           )
         })}
@@ -102,10 +135,11 @@ export function Sidebar() {
         <button
           type="button"
           onClick={handleLogout}
-          className="flex items-center gap-4 transition-colors cursor-pointer text-[#919191] hover:text-white"
+          className="group flex h-11 items-center gap-3 rounded-xl px-3 text-sm text-[#9ca3b4] transition-colors hover:bg-white/5 hover:text-white"
         >
-          <LogOut className="h-5 w-5" />
-          <span className="text-sm font-medium tracking-wide">LOG OUT</span>
+          <LogOut className="h-4 w-4" />
+          <span className="font-medium">Log out</span>
+          <ChevronRight className="ml-auto h-4 w-4 text-[#7f8798] opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
         </button>
       </div>
     </aside>

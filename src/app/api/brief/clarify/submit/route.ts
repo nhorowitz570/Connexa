@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 
-import { NextResponse } from "next/server"
+import { NextResponse, after } from "next/server"
 
 import { runPipeline } from "@/lib/pipeline/orchestrator"
 import { NormalizedBriefSchema, QuestionsPayloadSchema } from "@/lib/schemas"
@@ -11,6 +11,8 @@ type ClarificationSubmitInput = {
   brief_id?: string
   answers?: Record<string, unknown>
 }
+
+export const maxDuration = 300
 
 function dedupeOptions(values: unknown): string[] {
   if (!Array.isArray(values)) return []
@@ -178,7 +180,8 @@ export async function POST(request: Request) {
       .eq("id", body.brief_id)
     if (statusError) return NextResponse.json({ error: statusError.message }, { status: 500 })
 
-    void runPipeline(body.brief_id, runId)
+    const briefId = body.brief_id
+    after(() => runPipeline(briefId, runId))
 
     return NextResponse.json({ run_id: runId })
   } catch (error) {

@@ -11,9 +11,9 @@ export function LowConfidenceTips({ mode }: LowConfidenceTipsProps) {
     mode === "simple"
       ? ["If you used Simple mode, try Detailed mode for more control."]
       : [
-          "Add more specific constraints so candidate filtering is tighter.",
-          "Narrow geography to a specific state or metro when possible.",
-          "Add portfolio requirements to improve evidence-based matching.",
+          "Add more specific requirements to help narrow down results.",
+          "Try narrowing location to a specific state or city.",
+          "Mention the type of past work you'd like to see from matches.",
         ]
 
   return (
