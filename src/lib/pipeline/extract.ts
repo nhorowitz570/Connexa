@@ -1,6 +1,7 @@
 import { MODELS } from "@/lib/constants"
 import { callOpenRouter } from "@/lib/openrouter"
 import { CandidateSchema } from "@/lib/schemas"
+import { getTemporalContext } from "@/lib/temporal-context"
 import type { BriefMode, Candidate, NormalizedBrief } from "@/types"
 
 type EvidencePage = {
@@ -62,6 +63,7 @@ async function extractSingleDomain(
   }
 
   try {
+    const temporalContext = getTemporalContext()
     const context = pages
       .map((page) => `URL: ${page.url}\n${page.raw_content.slice(0, 5000)}`)
       .join("\n---\n")
@@ -71,6 +73,8 @@ async function extractSingleDomain(
         {
           role: "system",
           content: `Extract structured provider information from these web pages.
+${temporalContext}
+Content extraction date is the current UTC date in the temporal context above.
 Only include explicitly stated facts. Return JSON with:
 {
   company_name, website_url, services: [], industries: [],

@@ -62,7 +62,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "glass-card flex flex-col overflow-y-auto rounded-2xl border border-white/10 p-4 no-scrollbar",
+        "glass-card flex flex-col overflow-y-auto rounded-2xl border border-border p-4 no-scrollbar",
         className,
       )}
     >
@@ -76,7 +76,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
               onClick={onNavigate}
               className={cn(
                 "group relative flex h-11 items-center gap-3 overflow-hidden rounded-xl px-3 text-sm transition-colors",
-                active ? "text-white" : "text-[#9ca3b4] hover:bg-white/5 hover:text-white",
+                active ? "text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
               {active ? (
@@ -87,20 +87,20 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
                 />
               ) : null}
               <span className={cn("absolute inset-0 -z-10 rounded-xl", active && "bg-indigo-500/16 shadow-[0_0_0_1px_rgba(99,102,241,0.45)]")} />
-              <item.icon className={cn("h-4 w-4", active ? "text-indigo-300" : "text-[#9ca3b4] group-hover:text-white")} />
+              <item.icon className={cn("h-4 w-4", active ? "text-indigo-400" : "text-muted-foreground group-hover:text-foreground")} />
               <span className="font-medium">{item.label}</span>
-              <ChevronRight className="ml-auto h-4 w-4 text-[#7f8798] opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
+              <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
             </Link>
           )
         })}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-1 border-t border-white/10 pt-4">
+      <div className="mt-auto flex flex-col gap-1 border-t border-border pt-4">
         {bottomItems.map((item) => {
           const active = isActive(pathname, item.href, item.id)
           const classes = cn(
             "group relative flex h-11 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
-            active ? "text-white" : "text-[#9ca3b4] hover:bg-white/5 hover:text-white",
+            active ? "text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground",
           )
 
           if (item.id === "help") {
@@ -111,9 +111,9 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
                 className={classes}
                 onClick={onNavigate}
               >
-                <item.icon className={cn("h-4 w-4", active ? "text-indigo-300" : "text-[#9ca3b4] group-hover:text-white")} />
+                <item.icon className={cn("h-4 w-4", active ? "text-indigo-400" : "text-muted-foreground group-hover:text-foreground")} />
                 <span className="font-medium">{item.label}</span>
-                <ChevronRight className="ml-auto h-4 w-4 text-[#7f8798] opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
+                <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
               </a>
             )
           }
@@ -125,9 +125,9 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
               className={classes}
               onClick={onNavigate}
             >
-              <item.icon className={cn("h-4 w-4", active ? "text-indigo-300" : "text-[#9ca3b4] group-hover:text-white")} />
+              <item.icon className={cn("h-4 w-4", active ? "text-indigo-400" : "text-muted-foreground group-hover:text-foreground")} />
               <span className="font-medium">{item.label}</span>
-              <ChevronRight className="ml-auto h-4 w-4 text-[#7f8798] opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
+              <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
             </Link>
           )
         })}
@@ -135,11 +135,11 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
         <button
           type="button"
           onClick={handleLogout}
-          className="group flex h-11 items-center gap-3 rounded-xl px-3 text-sm text-[#9ca3b4] transition-colors hover:bg-white/5 hover:text-white"
+          className="group flex h-11 items-center gap-3 rounded-xl px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <LogOut className="h-4 w-4" />
           <span className="font-medium">Log out</span>
-          <ChevronRight className="ml-auto h-4 w-4 text-[#7f8798] opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
+          <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
         </button>
       </div>
     </aside>

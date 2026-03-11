@@ -43,10 +43,10 @@ export function AppearanceSection({ userId, initialThemePreference }: Appearance
   }
 
   return (
-    <section className="glass-card space-y-5 rounded-2xl border border-white/10 p-5">
+    <section className="glass-card space-y-5 rounded-2xl border border-border p-5">
       <div>
-        <h2 className="text-xl font-semibold text-white">Appearance</h2>
-        <p className="text-sm text-[#9ca3b4]">Choose your dashboard theme.</p>
+        <h2 className="text-xl font-semibold text-foreground">Appearance</h2>
+        <p className="text-sm text-muted-foreground">Choose your dashboard theme.</p>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
@@ -58,7 +58,7 @@ export function AppearanceSection({ userId, initialThemePreference }: Appearance
             "min-h-11 rounded-xl border px-3 py-2 text-left",
             themePreference === "dark"
               ? "border-indigo-400/40 bg-indigo-500/15 text-white"
-              : "border-white/10 bg-black/20 text-[#9ca3b4] hover:text-white",
+              : "border-border bg-muted/40 text-muted-foreground hover:text-foreground",
           )}
         >
           <div className="mb-1 flex items-center gap-2 text-sm font-medium">
@@ -74,8 +74,8 @@ export function AppearanceSection({ userId, initialThemePreference }: Appearance
           className={cn(
             "min-h-11 rounded-xl border px-3 py-2 text-left",
             themePreference === "light"
-              ? "border-indigo-400/40 bg-indigo-500/15 text-white"
-              : "border-white/10 bg-black/20 text-[#9ca3b4] hover:text-white",
+              ? "border-indigo-400/40 bg-indigo-500/15 text-foreground"
+              : "border-border bg-muted/40 text-muted-foreground hover:text-foreground",
           )}
         >
           <div className="mb-1 flex items-center gap-2 text-sm font-medium">
@@ -85,14 +85,14 @@ export function AppearanceSection({ userId, initialThemePreference }: Appearance
         </button>
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-        <div className="mb-1 flex items-center gap-2 text-sm font-medium text-white">
+      <div className="rounded-xl border border-border bg-muted/40 p-3">
+        <div className="mb-1 flex items-center gap-2 text-sm font-medium text-foreground">
           <Palette className="h-4 w-4 text-indigo-300" /> Accent color
         </div>
-        <p className="text-xs text-[#8290aa]">Coming soon. We will add brand color presets in a future update.</p>
+        <p className="text-xs text-muted-foreground">Coming soon. We will add brand color presets in a future update.</p>
       </div>
 
-      <Button variant="outline" disabled className="h-11 rounded-xl border-white/10 text-[#9ca3b4]">
+      <Button variant="outline" disabled className="h-11 rounded-xl border-border text-muted-foreground">
         <Monitor className="mr-2 h-4 w-4" />
         Sync with system (coming soon)
       </Button>

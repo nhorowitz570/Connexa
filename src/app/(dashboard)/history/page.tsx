@@ -33,6 +33,10 @@ type RunSummaryRow = {
   created_at: string
 }
 
+type AttachmentRow = {
+  brief_id: string
+}
+
 function topScoreByBrief(rows: ResultRow[]) {
   const map = new Map<string, number>()
   for (const row of rows) {
@@ -152,9 +156,19 @@ export default async function HistoryPage({
       .in("brief_id", briefIds)
       .order("created_at", { ascending: false })
     : { data: [] as RunSummaryRow[] }
+  const { data: attachmentRowsRaw } = briefIds.length
+    ? await supabase
+      .from("brief_attachments")
+      .select("brief_id")
+      .in("brief_id", briefIds)
+    : { data: [] as AttachmentRow[] }
 
   const scoreByBrief = topScoreByBrief((results ?? []) as ResultRow[])
   const runsByBrief = latestRunByBrief((latestRunsRaw ?? []) as RunSummaryRow[])
+  const attachmentCountByBrief = new Map<string, number>()
+  for (const row of (attachmentRowsRaw ?? []) as AttachmentRow[]) {
+    attachmentCountByBrief.set(row.brief_id, (attachmentCountByBrief.get(row.brief_id) ?? 0) + 1)
+  }
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE))
 
@@ -171,7 +185,7 @@ export default async function HistoryPage({
     <section className="flex flex-col gap-6 animate-in fade-in duration-500">
       <div>
         <h1 className="text-2xl font-semibold">Brief History</h1>
-        <p className="text-sm text-[#919191]">Browse all previous sourcing briefs.</p>
+        <p className="text-sm text-muted-foreground">Browse all previous sourcing briefs.</p>
       </div>
 
       <HistoryInsights
@@ -217,6 +231,7 @@ export default async function HistoryPage({
               createdAt: brief.created_at,
               score: scoreByBrief.get(brief.id) ?? null,
               durationLabel,
+              attachmentCount: attachmentCountByBrief.get(brief.id) ?? 0,
             }
           })}
         />
@@ -226,7 +241,7 @@ export default async function HistoryPage({
         <Button asChild variant="outline" disabled={page <= 1}>
           <Link href={makePageHref(Math.max(1, page - 1))}>Previous</Link>
         </Button>
-        <p className="text-sm text-[#919191]">
+        <p className="text-sm text-muted-foreground">
           Page {Math.min(Math.max(page, 1), totalPages)} of {totalPages}
         </p>
         <Button asChild variant="outline" disabled={page >= totalPages}>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { MODELS } from "@/lib/constants"
 import { createClient } from "@/lib/supabase/server"
+import { getTemporalContext } from "@/lib/temporal-context"
 
 type ChatInput = {
   thread_id?: string
@@ -327,6 +328,7 @@ export async function POST(request: Request) {
             role: "system",
             content:
               "You are ConnexaAI Assistant. Answer using only the current user's context. " +
+              `${getTemporalContext()} ` +
               "When discussing specific briefs, reference them by their brief name when available. " +
               "If asked to summarize briefs, use recent_briefs_summary and highlight status/category concisely. " +
               "Never mention pipeline internals or other users. Be concise and actionable. Context: " +

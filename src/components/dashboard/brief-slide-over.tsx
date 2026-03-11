@@ -284,25 +284,25 @@ export function BriefSlideOver({ briefId, open, onOpenChange, onBriefDeleted }: 
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto border-[#1F1F1F] bg-[#0D0D0D] p-0 text-white sm:max-w-3xl">
+      <SheetContent side="right" className="w-full overflow-y-auto border-border bg-background p-0 text-foreground sm:max-w-3xl">
         <div className="flex min-h-full flex-col">
-          <SheetHeader className="border-b border-[#1F1F1F] bg-[#111]">
-            <SheetTitle className="text-left text-white">{displayName}</SheetTitle>
-            <SheetDescription className="text-left text-[#919191]">
+          <SheetHeader className="border-b border-border bg-muted/40">
+            <SheetTitle className="text-left text-foreground">{displayName}</SheetTitle>
+            <SheetDescription className="text-left text-muted-foreground">
               In-context brief preview from History.
             </SheetDescription>
             {brief ? (
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary">{brief.mode}</Badge>
                 <BriefStatusBadge status={brief.status} />
-                {durationLabel ? <span className="text-xs text-[#919191]">AI duration: {durationLabel}</span> : null}
+                {durationLabel ? <span className="text-xs text-muted-foreground">AI duration: {durationLabel}</span> : null}
               </div>
             ) : null}
           </SheetHeader>
 
           <div className="flex-1 space-y-4 p-4">
             {loading ? (
-              <div className="flex items-center gap-2 text-sm text-[#919191]">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading brief details...
               </div>
@@ -351,6 +351,11 @@ export function BriefSlideOver({ briefId, open, onOpenChange, onBriefDeleted }: 
                     status={brief.status}
                     normalizedBrief={normalizedBrief?.success ? normalizedBrief.data : brief.normalized_brief}
                   />
+                  {brief.status === "clarifying" ? (
+                    <Button asChild className="bg-amber-600 text-white hover:bg-amber-700">
+                      <Link href={`/brief/${brief.id}`}>Resume Clarification</Link>
+                    </Button>
+                  ) : null}
                   {brief.status === "running" ? (
                     <CancelBriefButton briefId={brief.id} onCancelled={() => void loadBriefData()} />
                   ) : null}
@@ -384,9 +389,9 @@ export function BriefSlideOver({ briefId, open, onOpenChange, onBriefDeleted }: 
                   </Dialog>
                 </div>
 
-                <Card className="border-[#1F1F1F] bg-[#111]">
+                <Card className="border-border bg-card">
                   <CardHeader>
-                    <CardTitle className="text-white">Brief Summary</CardTitle>
+                    <CardTitle className="text-foreground">Brief Summary</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <BriefSummaryCard normalizedBrief={normalizedBrief?.success ? normalizedBrief.data : null} />
@@ -408,8 +413,8 @@ export function BriefSlideOver({ briefId, open, onOpenChange, onBriefDeleted }: 
                 <div className="space-y-3">
                   <h3 className="text-lg font-semibold">Results</h3>
                   {results.length === 0 ? (
-                    <Card className="border-[#1F1F1F] bg-[#111]">
-                      <CardContent className="pt-6 text-sm text-[#919191]">
+                    <Card className="border-border bg-card">
+                      <CardContent className="pt-6 text-sm text-muted-foreground">
                         No results yet for this brief.
                       </CardContent>
                     </Card>

@@ -4,6 +4,7 @@ import { MISS_REASONS, MODELS } from "@/lib/constants"
 import { callOpenRouter } from "@/lib/openrouter"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
+import { getTemporalContext } from "@/lib/temporal-context"
 
 type ComputeInput = {
   date?: string
@@ -169,11 +170,15 @@ async function generateRecommendations(payload: {
   if (!process.env.OPENROUTER_API_KEY) return fallback
 
   try {
+    const analysisDate = new Date(`${payload.date}T00:00:00.000Z`)
+    const temporalContext = getTemporalContext(analysisDate)
     const response = await callOpenRouter(
       [
         {
           role: "system",
           content: `You generate concise sourcing optimization recommendations.
+${temporalContext}
+Treat payload.date as the analysis date and contextualize guidance relative to that date.
 Return JSON:
 {
   "recommendations": [

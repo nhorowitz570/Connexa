@@ -11,18 +11,18 @@ export function ConnexaLogo({ className }: { className?: string }) {
                 <rect width="32" height="32" rx="8" fill="url(#connexa-gradient)" />
                 <path
                     d="M16 8L22 12V20L16 24L10 20V12L16 8Z"
-                    stroke="white"
+                    stroke="currentColor"
                     strokeWidth="1.5"
                     strokeLinejoin="round"
                     fill="none"
                 />
-                <circle cx="16" cy="16" r="3" fill="white" />
-                <path d="M16 8V13" stroke="white" strokeWidth="1.5" />
-                <path d="M16 19V24" stroke="white" strokeWidth="1.5" />
-                <path d="M10 12L14 14.5" stroke="white" strokeWidth="1.5" />
-                <path d="M18 17.5L22 20" stroke="white" strokeWidth="1.5" />
-                <path d="M22 12L18 14.5" stroke="white" strokeWidth="1.5" />
-                <path d="M14 17.5L10 20" stroke="white" strokeWidth="1.5" />
+                <circle cx="16" cy="16" r="3" fill="currentColor" />
+                <path d="M16 8V13" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M16 19V24" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M10 12L14 14.5" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M18 17.5L22 20" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M22 12L18 14.5" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M14 17.5L10 20" stroke="currentColor" strokeWidth="1.5" />
                 <defs>
                     <linearGradient id="connexa-gradient" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
                         <stop stopColor="#6366f1" />
@@ -30,7 +30,7 @@ export function ConnexaLogo({ className }: { className?: string }) {
                     </linearGradient>
                 </defs>
             </svg>
-            <span className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white">
+            <span className="text-xl font-semibold tracking-tight text-foreground">
                 Connexa<span className="text-indigo-400">AI</span>
             </span>
         </div>

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 
 import { AiSummary } from "@/components/brief/ai-summary"
+import { AttachmentList } from "@/components/brief/attachment-list"
 import { BriefDetailClient } from "@/components/brief/brief-detail-client"
 import { BriefNameEditor } from "@/components/brief/brief-name-editor"
 import { BriefStatusBadge } from "@/components/brief/brief-status-badge"
@@ -14,10 +15,10 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { CONFIDENCE } from "@/lib/constants"
-import { NormalizedBriefSchema, ScoredResultSchema } from "@/lib/schemas"
+import { NormalizedBriefSchema, QuestionsPayloadSchema, ScoredResultSchema } from "@/lib/schemas"
 import { createClient } from "@/lib/supabase/server"
 import { formatDuration, parseDurationFromNotes } from "@/lib/utils"
-import type { ScoredResult } from "@/types"
+import type { QuestionsPayload, ScoredResult } from "@/types"
 
 function parseResultRow(row: {
   company_name: string
@@ -97,10 +98,50 @@ export default async function BriefDetailPage({
       status: "draft" | "clarifying" | "running" | "complete" | "error" | "cancelled"
       normalized_brief: unknown
       weights: unknown
+      updated_at: string
     }
     | null
 
   if (!brief) notFound()
+
+  let effectiveBriefStatus = brief.status
+  let pendingClarificationPayload: QuestionsPayload | null = null
+  let isClarificationGenerationPending = false
+  let wasClarificationStuck = false
+
+  if (brief.status === "clarifying") {
+    const { data: latestQuestionRow } = await supabase
+      .from("brief_questions")
+      .select("questions, answers")
+      .eq("brief_id", brief.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (latestQuestionRow?.answers === null) {
+      const parsedQuestions = QuestionsPayloadSchema.safeParse(latestQuestionRow.questions)
+      if (parsedQuestions.success) {
+        pendingClarificationPayload = parsedQuestions.data
+      }
+    }
+
+    if (!pendingClarificationPayload) {
+      isClarificationGenerationPending = !latestQuestionRow
+
+      if (!isClarificationGenerationPending) {
+        const { error: resetError } = await supabase
+          .from("briefs")
+          .update({ status: "draft" })
+          .eq("id", brief.id)
+          .eq("user_id", user.id)
+
+        if (!resetError) {
+          effectiveBriefStatus = "draft"
+          wasClarificationStuck = true
+        }
+      }
+    }
+  }
 
   const { data: runsData } = await supabase
     .from("runs")
@@ -202,11 +243,11 @@ export default async function BriefDetailPage({
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="secondary">{brief.mode}</Badge>
-          <BriefStatusBadge status={brief.status} />
+          <BriefStatusBadge status={effectiveBriefStatus} />
           <ExportDropdown
             briefId={brief.id}
             mode={brief.mode}
-            status={brief.status}
+            status={effectiveBriefStatus}
             normalizedBrief={normalizedBrief.success ? normalizedBrief.data : brief.normalized_brief}
             weights={brief.weights}
             run={exportRun}
@@ -226,7 +267,7 @@ export default async function BriefDetailPage({
           />
           <RerunButton
             briefId={brief.id}
-            status={brief.status}
+            status={effectiveBriefStatus}
             normalizedBrief={normalizedBrief.success ? normalizedBrief.data : brief.normalized_brief}
           />
           {brief.status === "running" ? <CancelBriefButton briefId={brief.id} /> : null}
@@ -247,10 +288,15 @@ export default async function BriefDetailPage({
         </CardContent>
       </Card>
 
+      <AttachmentList briefId={brief.id} />
+
       <BriefDetailClient
         latestRun={latestRunForClient}
         briefId={brief.id}
         normalizedBrief={normalizedBrief.success ? normalizedBrief.data : brief.normalized_brief}
+        clarificationPayload={pendingClarificationPayload}
+        clarificationGenerationPending={isClarificationGenerationPending}
+        clarificationStuckReset={wasClarificationStuck}
       />
 
       {isLowConfidenceFailure ? <LowConfidenceTips mode={brief.mode} /> : null}

@@ -14,6 +14,7 @@ import { runPipeline } from "@/lib/pipeline/orchestrator"
 import { NormalizedBriefSchema, QuestionsPayloadSchema, RerunOverridesSchema } from "@/lib/schemas"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
+import { getTemporalContext } from "@/lib/temporal-context"
 import type { NormalizedBrief, QuestionsPayload, RerunOverrides } from "@/types"
 
 type StartInput = {
@@ -68,11 +69,13 @@ async function generateClarificationsWithModel(
   }
 
   try {
+    const temporalContext = getTemporalContext()
     const response = await callOpenRouterWithTimeout(
       [
         {
           role: "system",
           content: `Generate 1-5 targeted clarification questions for a B2B sourcing brief.
+${temporalContext}
 Return ONLY JSON with this schema:
 {
   "type": "connexa.clarifications.v1",
@@ -101,7 +104,9 @@ Rules:
 - Max 5 questions.
 - Ask only questions that materially change provider selection.
 - For "multiple_choice" and "select", include at least 2 options.
-- Prefer fieldPath values like constraints, geography.region, timeline.*, optional.*`,
+- Prefer fieldPath values like constraints, geography.region, timeline.*, optional.*
+- Do not ask timeline or deadline questions that are already in the past.
+- Frame timeline clarifications relative to today's date.`,
         },
         {
           role: "user",

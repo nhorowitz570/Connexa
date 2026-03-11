@@ -4,6 +4,7 @@ import { z } from "zod"
 import { MODELS } from "@/lib/constants"
 import { callOpenRouterWithTimeout } from "@/lib/openrouter-with-timeout"
 import { createClient } from "@/lib/supabase/server"
+import { getQuarterContext, getTemporalContext } from "@/lib/temporal-context"
 
 type Recommendation = {
   id: string
@@ -91,9 +92,7 @@ function getPrimaryServiceType(brief: BriefRow): string {
 }
 
 function quarterPrompt(): { prompt: string; reason: string; category: string } {
-  const now = new Date()
-  const quarter = Math.floor(now.getMonth() / 3) + 1
-  const nextQuarter = quarter === 4 ? 1 : quarter + 1
+  const { quarter, nextQuarter } = getQuarterContext()
   return {
     prompt: `Need a strategic partner for Q${nextQuarter} planning with measurable delivery milestones and B2B case studies.`,
     reason: `Teams often prepare Q${nextQuarter} initiatives during Q${quarter}, so this catches planning windows early.`,
@@ -185,6 +184,8 @@ async function llmRecommendations(input: {
   if (!process.env.OPENROUTER_API_KEY) return null
 
   try {
+    const temporalContext = getTemporalContext()
+    const { quarter, nextQuarter } = getQuarterContext()
     const briefSummaries = input.briefs.map((brief) => ({
       id: brief.id,
       name: brief.name,
@@ -200,6 +201,8 @@ async function llmRecommendations(input: {
         {
           role: "system",
           content: `Generate personalized brief prompt recommendations.
+${temporalContext}
+Current planning cycle context: current quarter is Q${quarter}; next quarter is Q${nextQuarter}.
 Return JSON only:
 {
   "recommendations": [

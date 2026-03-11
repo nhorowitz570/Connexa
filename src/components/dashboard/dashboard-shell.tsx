@@ -27,7 +27,7 @@ export function DashboardShell({ children, email, fullName }: DashboardShellProp
       <Header email={email} fullName={fullName} onOpenMobileNav={() => setMobileNavOpen(true)} />
 
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-        <SheetContent side="left" className="w-[300px] border-r border-white/10 bg-[#0c111a]/95 p-4 backdrop-blur-2xl">
+        <SheetContent side="left" className="w-[300px] border-r border-border bg-background/95 p-4 backdrop-blur-2xl">
           <Sidebar className="h-full w-full" onNavigate={() => setMobileNavOpen(false)} />
         </SheetContent>
       </Sheet>

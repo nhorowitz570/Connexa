@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { DEFAULT_BRIEF_WEIGHTS, MODELS } from "@/lib/constants"
 import { callOpenRouterWithTimeout } from "@/lib/openrouter-with-timeout"
 import { NormalizeResponseSchema, NormalizedBriefSchema } from "@/lib/schemas"
+import { getTemporalContext } from "@/lib/temporal-context"
 import type { BriefWeights, NormalizedBrief } from "@/types"
 
 type NormalizeInput = {
@@ -136,11 +137,13 @@ export async function POST(request: Request) {
 
     if (process.env.OPENROUTER_API_KEY) {
       try {
+        const temporalContext = getTemporalContext()
         const response = await callOpenRouterWithTimeout(
           [
             {
               role: "system",
               content: `Normalize this B2B sourcing request.
+${temporalContext}
 Return JSON exactly matching:
 {
   "service_type": string,
@@ -150,7 +153,8 @@ Return JSON exactly matching:
   "geography": {"region": string, "remote_ok": boolean},
   "constraints": string[],
   "optional": {}
-}`,
+}
+Interpret relative timeline references like "next quarter" or "in 3 months" relative to today's date.`,
             },
             {
               role: "user",

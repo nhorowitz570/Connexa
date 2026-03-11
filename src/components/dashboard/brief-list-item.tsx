@@ -11,6 +11,7 @@ type BriefListItemProps = {
   createdAt: string
   score: number | null
   durationLabel?: string | null
+  attachmentCount?: number
   onSelect: (briefId: string) => void
 }
 
@@ -24,6 +25,7 @@ export function BriefListItem({
   createdAt,
   score,
   durationLabel,
+  attachmentCount,
   onSelect,
 }: BriefListItemProps) {
   const primaryText = name?.trim() || serviceType || "Untitled brief"
@@ -40,6 +42,11 @@ export function BriefListItem({
         <div className="flex items-center gap-2">
           <Badge variant="secondary">{mode}</Badge>
           <BriefStatusBadge status={status} />
+          {status === "clarifying" ? (
+            <Badge className="border border-amber-500/35 bg-amber-500/15 text-amber-700 dark:text-amber-300">
+              Needs your input
+            </Badge>
+          ) : null}
         </div>
         <p className="text-left font-medium">{primaryText}</p>
         {showServiceType ? <p className="text-left text-sm text-muted-foreground">{serviceType}</p> : null}
@@ -53,6 +60,7 @@ export function BriefListItem({
         <p className="text-left text-sm text-muted-foreground">
           {new Date(createdAt).toLocaleDateString()}
           {durationLabel ? ` - Duration: ${durationLabel}` : ""}
+          {attachmentCount && attachmentCount > 0 ? ` - ${attachmentCount} attachment${attachmentCount === 1 ? "" : "s"}` : ""}
         </p>
       </div>
       <div className="text-right">

@@ -36,19 +36,19 @@ export function Header({ email, fullName }: HeaderProps) {
   }
 
   return (
-    <header className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-6 bg-black/10 backdrop-blur-[120px]">
+    <header className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between border-b border-border/60 bg-background/80 p-6 backdrop-blur-[120px]">
       <Link href="/">
         <ConnexaLogo className="h-8 w-auto" />
       </Link>
 
       <div className="flex items-center gap-4">
         {/* Global Search */}
-        <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-[#1A1A1A] rounded-lg border border-[#333] hover:border-[#444] transition-colors">
-          <Search className="h-4 w-4 text-[#919191]" />
+        <div className="hidden items-center gap-2 rounded-lg border border-border bg-muted/50 px-4 py-2 transition-colors hover:border-border sm:flex">
+          <Search className="h-4 w-4 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search briefs..."
-            className="bg-transparent text-sm text-white placeholder-[#919191] focus:outline-none w-40 lg:w-56"
+            className="w-40 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none lg:w-56"
           />
         </div>
 
@@ -67,7 +67,7 @@ export function Header({ email, fullName }: HeaderProps) {
 
         <button
           onClick={handleLogout}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#333] text-[#919191] transition-colors hover:text-white md:hidden"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:text-foreground md:hidden"
           aria-label="Log out"
         >
           <LogOut className="h-4 w-4" />

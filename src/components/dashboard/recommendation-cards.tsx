@@ -58,24 +58,24 @@ export function RecommendationCards() {
   }, [])
 
   return (
-    <section className="glass-card rounded-3xl border border-white/10 p-4 sm:p-6">
+    <section className="glass-card rounded-3xl border border-border p-4 sm:p-6">
       <div className="mb-4 flex items-center gap-2">
         <span className="rounded-lg bg-indigo-500/15 p-1.5 text-indigo-300">
           <Sparkles className="h-4 w-4" />
         </span>
         <div>
-          <h2 className="text-lg font-semibold text-white">Suggested Searches</h2>
-          <p className="text-xs text-[#95a2bb]">Generated from your recent brief activity</p>
+          <h2 className="text-lg font-semibold text-foreground">Suggested Searches</h2>
+          <p className="text-xs text-muted-foreground">Generated from your recent brief activity</p>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-4 text-sm text-[#9ca8bf]">
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-4 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Building recommendations...
         </div>
       ) : recommendations.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-white/20 bg-black/20 px-4 py-5 text-sm text-[#9ca8bf]">
+        <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-5 text-sm text-muted-foreground">
           Submit your first brief to get personalized recommendations.
         </div>
       ) : (
@@ -87,18 +87,18 @@ export function RecommendationCards() {
               onClick={() =>
                 router.push(`/brief/new?prompt=${encodeURIComponent(recommendation.prompt)}`)
               }
-              className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left transition-colors hover:border-indigo-400/40 hover:bg-indigo-500/10"
+              className="rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-indigo-400/40 hover:bg-indigo-500/10"
             >
               <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] uppercase tracking-wide text-[#c8d2e4]">
+                <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] uppercase tracking-wide text-muted-foreground">
                   {recommendation.category}
                 </span>
-                <span className="text-xs text-[#92a0bb]">
+                <span className="text-xs text-muted-foreground">
                   {Math.round(recommendation.confidence * 100)}% match
                 </span>
               </div>
-              <p className="text-sm font-medium text-white">{recommendation.prompt}</p>
-              <p className="mt-1 text-xs text-[#9aa6bf]">{recommendation.reason}</p>
+              <p className="text-sm font-medium text-foreground">{recommendation.prompt}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{recommendation.reason}</p>
             </button>
           ))}
         </div>

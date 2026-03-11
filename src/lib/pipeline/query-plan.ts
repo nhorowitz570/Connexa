@@ -1,5 +1,6 @@
 import { MODELS, type SearchDepth } from "@/lib/constants"
 import { callOpenRouter } from "@/lib/openrouter"
+import { getTemporalContext } from "@/lib/temporal-context"
 import type { NormalizedBrief } from "@/types"
 
 type GenerateQueryPlanOptions = {
@@ -92,6 +93,7 @@ export async function generateQueryPlan(
   const usState = getUsState(normalizedBrief)
 
   try {
+    const temporalContext = getTemporalContext()
     const response = await callOpenRouter(
       [
         {
@@ -99,14 +101,17 @@ export async function generateQueryPlan(
           content:
             searchDepth === "deep"
               ? `Generate 30-40 diverse search queries for Exa to find B2B service providers.
+${temporalContext}
 Rules:
 - Exa works best with natural-language semantic queries.
 - Cover many angles: direct services, portfolios, case studies, industries, synonyms, buyer intent.
 - Include geography modifiers where relevant.
 - If optional.us_state exists, include it in at least 6 queries.
 - Include vertical-specific variants and alternate terminology.
-- Return JSON: { "queries": ["..."] }`
+- Return JSON: { "queries": ["..."] }
+- Keep timeline-related query wording grounded in the current date.`
               : `Generate 5-12 search queries for Exa (a neural/semantic search engine) to find B2B service providers matching this brief.
+${temporalContext}
 Rules:
 - Exa works best with natural-language, descriptive queries (not keyword-stuffed)
 - Use singular nouns for roles: "software engineer" not "software engineers"
@@ -116,7 +121,8 @@ Rules:
 - Include industry-specific terms
 - Vary query angles: direct service search, portfolio/case-study discovery, industry + service combinations
 - Avoid adding pricing modifiers unless explicitly requested
-- Return JSON: { "queries": ["..."] }`,
+- Return JSON: { "queries": ["..."] }
+- Keep timeline-related query wording grounded in the current date.`,
         },
         {
           role: "user",

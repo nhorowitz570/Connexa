@@ -114,6 +114,7 @@ export async function POST(request: Request) {
       .from("brief_questions")
       .select("id, questions")
       .eq("brief_id", body.brief_id)
+      .is("answers", null)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()

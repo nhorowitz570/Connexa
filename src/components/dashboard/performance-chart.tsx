@@ -39,15 +39,15 @@ export function PerformanceChart() {
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
-      className="glass-card rounded-3xl border border-white/10 p-4 sm:p-6"
+      className="glass-card rounded-3xl border border-border p-4 sm:p-6"
     >
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-white sm:text-xl">Search Activity</h2>
-          <p className="text-sm text-[#9ca3b4]">How many discovery runs finished each day</p>
+          <h2 className="text-lg font-semibold text-foreground sm:text-xl">Search Activity</h2>
+          <p className="text-sm text-muted-foreground">How many discovery runs finished each day</p>
         </div>
 
-        <div className="flex items-center rounded-xl border border-white/10 bg-black/20 p-1">
+        <div className="flex items-center rounded-xl border border-border bg-muted/40 p-1">
           {RANGE_OPTIONS.map((period) => (
             <motion.button
               key={period}
@@ -56,7 +56,7 @@ export function PerformanceChart() {
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm ${
                 period === range
                   ? "bg-indigo-500/80 text-white shadow"
-                  : "text-[#9ca3b4] hover:text-white"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {period}
@@ -65,7 +65,7 @@ export function PerformanceChart() {
         </div>
       </div>
 
-      <div className="mb-4 hidden items-center gap-6 text-sm text-[#9ca3b4] sm:flex">
+      <div className="mb-4 hidden items-center gap-6 text-sm text-muted-foreground sm:flex">
         <div className="flex items-center gap-2">
           <span className="animate-pulse-glow h-2.5 w-2.5 rounded-full bg-indigo-400" />
           <span>Completed searches</span>
@@ -75,7 +75,7 @@ export function PerformanceChart() {
 
       <div className={`h-[250px] w-full transition-opacity duration-300 sm:h-[320px] ${isPending ? "opacity-60" : "opacity-100"}`}>
         {data.length === 0 && !isPending ? (
-          <div className="flex h-full items-center justify-center text-sm text-[#9ca3b4]">
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             No search activity in this time range.
           </div>
         ) : (
@@ -90,13 +90,13 @@ export function PerformanceChart() {
               <CartesianGrid strokeDasharray="3 3" stroke="#243042" vertical={false} />
               <XAxis
                 dataKey="date"
-                tick={{ fill: "#91a0b8", fontSize: 11 }}
+                tick={{ fill: "currentColor", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
                 domain={[0, yMax]}
-                tick={{ fill: "#91a0b8", fontSize: 11 }}
+                tick={{ fill: "currentColor", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 width={34}
@@ -106,9 +106,9 @@ export function PerformanceChart() {
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null
                   return (
-                    <div className="rounded-xl border border-white/15 bg-[#0f1624]/95 px-3 py-2 text-sm text-[#d9e0ef] shadow-xl backdrop-blur-xl">
-                      <p className="font-semibold text-white">{payload[0].value} runs</p>
-                      <p className="text-xs text-[#9ca3b4]">{payload[0].payload.date}</p>
+                    <div className="rounded-xl border border-border bg-popover/95 px-3 py-2 text-sm text-popover-foreground shadow-xl backdrop-blur-xl">
+                      <p className="font-semibold text-foreground">{payload[0].value} runs</p>
+                      <p className="text-xs text-muted-foreground">{payload[0].payload.date}</p>
                     </div>
                   )
                 }}

@@ -322,7 +322,7 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
   }, [trimmedSearchTerm])
 
   return (
-    <header className="glass-card fixed inset-x-0 top-0 z-50 border-b border-white/10 px-3 py-3 sm:px-5 lg:px-8">
+    <header className="glass-card fixed inset-x-0 top-0 z-50 border-b border-border px-3 py-3 sm:px-5 lg:px-8">
       <div className="flex w-full items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Button
@@ -330,7 +330,7 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
             variant="ghost"
             size="icon"
             onClick={onOpenMobileNav}
-            className="h-11 w-11 rounded-xl text-[#c4cad6] hover:bg-white/10 hover:text-white md:hidden"
+            className="h-11 w-11 rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
             aria-label="Open menu"
           >
             <Menu className="h-5 w-5" />
@@ -347,7 +347,7 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
               onSubmit={handleGlobalSearch}
               className="glass-card-hover glass-card flex h-11 w-full items-center gap-2 rounded-xl px-3"
             >
-              <Search className="h-4 w-4 text-[#9ba3b6]" />
+              <Search className="h-4 w-4 text-muted-foreground" />
               <input
                 ref={searchInputRef}
                 value={searchTerm}
@@ -362,28 +362,28 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
                   setSearchOpen(true)
                 }}
                 placeholder="Search briefs, pages, and settings"
-                className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-[#9ba3b6] focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
                 aria-label="Search briefs, pages, and settings"
               />
               <button
                 type="submit"
-                className="rounded-md border border-white/15 bg-white/5 px-2 py-1 text-[10px] text-[#9ba3b6] transition-colors hover:text-white"
+                className="rounded-md border border-border bg-muted/50 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
               >
                 Cmd+K
               </button>
             </form>
 
             {searchOpen ? (
-              <div className="absolute left-0 right-0 top-[calc(100%+8px)] rounded-xl border border-white/10 bg-[#0d1422]/96 p-2 shadow-2xl backdrop-blur-2xl">
+              <div className="absolute left-0 right-0 top-[calc(100%+8px)] rounded-xl border border-border bg-popover/95 p-2 shadow-2xl backdrop-blur-2xl">
                 {trimmedSearchTerm.length > 0 ? (
-                  <p className="px-2 py-1 text-xs text-[#7f8ba3]">Results for &quot;{trimmedSearchTerm}&quot;</p>
+                  <p className="px-2 py-1 text-xs text-muted-foreground">Results for &quot;{trimmedSearchTerm}&quot;</p>
                 ) : (
-                  <p className="px-2 py-1 text-xs text-[#7f8ba3]">Quick links</p>
+                  <p className="px-2 py-1 text-xs text-muted-foreground">Quick links</p>
                 )}
 
                 <div className="max-h-[22rem] space-y-2 overflow-y-auto pr-1">
                   <div>
-                    <p className="px-2 pb-1 text-[11px] uppercase tracking-wide text-[#7f8ba3]">Pages</p>
+                    <p className="px-2 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Pages</p>
                     {filteredPages.map((item) => (
                       <button
                         key={item.href}
@@ -393,15 +393,15 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
                       >
                         <LayoutGrid className="mt-0.5 h-4 w-4 text-indigo-300" />
                         <span className="min-w-0">
-                          <span className="block text-sm text-white">{item.title}</span>
-                          <span className="block truncate text-xs text-[#8d9ab3]">{item.description}</span>
+                          <span className="block text-sm text-foreground">{item.title}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{item.description}</span>
                         </span>
                       </button>
                     ))}
                   </div>
 
                   <div>
-                    <p className="px-2 pb-1 text-[11px] uppercase tracking-wide text-[#7f8ba3]">Settings</p>
+                    <p className="px-2 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Settings</p>
                     {filteredSettings.map((item) => (
                       <button
                         key={item.href}
@@ -411,17 +411,17 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
                       >
                         <SlidersHorizontal className="mt-0.5 h-4 w-4 text-indigo-300" />
                         <span className="min-w-0">
-                          <span className="block text-sm text-white">{item.title}</span>
-                          <span className="block truncate text-xs text-[#8d9ab3]">{item.description}</span>
+                          <span className="block text-sm text-foreground">{item.title}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{item.description}</span>
                         </span>
                       </button>
                     ))}
                   </div>
 
                   <div>
-                    <p className="px-2 pb-1 text-[11px] uppercase tracking-wide text-[#7f8ba3]">Briefs</p>
+                    <p className="px-2 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Briefs</p>
                     {isSearching ? (
-                      <div className="flex items-center gap-2 px-2 py-2 text-xs text-[#8d9ab3]">
+                      <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         Searching...
                       </div>
@@ -435,15 +435,15 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
                         >
                           <FileText className="mt-0.5 h-4 w-4 text-indigo-300" />
                           <span className="min-w-0">
-                            <span className="block text-sm text-white">{brief.name?.trim() || brief.service_type}</span>
-                            <span className="block truncate text-xs text-[#8d9ab3]">
+                            <span className="block text-sm text-foreground">{brief.name?.trim() || brief.service_type}</span>
+                            <span className="block truncate text-xs text-muted-foreground">
                               {brief.service_type} - {statusLabel(brief.status)}
                             </span>
                           </span>
                         </button>
                       ))
                     ) : (
-                      <p className="px-2 py-2 text-xs text-[#8d9ab3]">
+                      <p className="px-2 py-2 text-xs text-muted-foreground">
                         {trimmedSearchTerm.length > 0 ? "No matching briefs" : "Type to search your briefs"}
                       </p>
                     )}
@@ -459,7 +459,7 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
                         goTo(`/history?${params.toString()}`)
                       }}
                       className={cn(
-                        "w-full rounded-lg border border-white/10 px-2 py-2 text-left text-xs text-[#c0c9dc]",
+                        "w-full rounded-lg border border-border px-2 py-2 text-left text-xs text-muted-foreground",
                         "transition-colors hover:border-indigo-400/30 hover:bg-indigo-500/10 hover:text-white",
                       )}
                     >
@@ -473,10 +473,10 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-[#c0c9dc] lg:flex">
+          <div className="hidden items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-2 text-xs text-foreground lg:flex">
             <Coins className="h-3.5 w-3.5 text-indigo-300" />
             {creditsLoading ? (
-              <span className="inline-flex items-center gap-1 text-[#9ba3b6]">
+              <span className="inline-flex items-center gap-1 text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Credits
               </span>
@@ -484,9 +484,9 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
               <span>Credits: {formatCreditsRemaining(creditsRemaining)}</span>
             )}
             <button
-              type="button"
-              onClick={() => setPurchaseDialogOpen(true)}
-              className="rounded-md border border-indigo-400/30 bg-indigo-500/10 px-2 py-0.5 text-[11px] text-indigo-200 transition-colors hover:bg-indigo-500/20"
+                type="button"
+                onClick={() => setPurchaseDialogOpen(true)}
+                className="rounded-md border border-indigo-400/30 bg-indigo-500/10 px-2 py-0.5 text-[11px] text-indigo-200 transition-colors hover:bg-indigo-500/20"
             >
               Buy
             </button>
@@ -503,7 +503,7 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="rounded-2xl border border-white/15 bg-white/5 p-1 transition-colors hover:bg-white/10"
+                className="rounded-2xl border border-border bg-muted/50 p-1 transition-colors hover:bg-muted"
                 aria-label="Open profile menu"
               >
                 <Avatar className="h-9 w-9">
@@ -513,10 +513,10 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
                 </Avatar>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-60 bg-[#101620]/95 text-[#d7deec] backdrop-blur-xl">
+            <DropdownMenuContent align="end" className="w-60 bg-popover/95 text-popover-foreground backdrop-blur-xl">
               <DropdownMenuLabel className="space-y-0.5">
-                <p className="text-sm font-semibold text-white">{fullName ?? "Connexa User"}</p>
-                <p className="truncate text-xs text-[#9ba3b6]">{email}</p>
+                <p className="text-sm font-semibold text-foreground">{fullName ?? "Connexa User"}</p>
+                <p className="truncate text-xs text-muted-foreground">{email}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>

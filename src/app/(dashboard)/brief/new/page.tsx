@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter, useSearchParams } from "next/navigation"
-import { type FormEvent, useEffect, useMemo, useState } from "react"
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { AnimatePresence, motion } from "framer-motion"
 import {
@@ -25,6 +25,7 @@ import { createClient } from "@/lib/supabase/client"
 import { ensureProfileExists } from "@/lib/supabase/ensure-profile"
 import type { NormalizedBrief, QuestionsPayload } from "@/types"
 import { ClarificationRenderer } from "@/components/brief/clarification-renderer"
+import { AttachmentUploader } from "@/components/brief/attachment-uploader"
 import { RunStatusPoller } from "@/components/pipeline/run-status-poller"
 
 type Mode = "simple" | "detailed" | null
@@ -152,8 +153,10 @@ export default function NewBriefPage() {
   // Clarification state
   const [clarificationPayload, setClarificationPayload] = useState<QuestionsPayload | null>(null)
   const [briefId, setBriefId] = useState<string | null>(null)
+  const [attachmentCount, setAttachmentCount] = useState(0)
   const [normalizedBrief, setNormalizedBrief] = useState<NormalizedBrief | null>(null)
   const [weights, setWeights] = useState<Record<string, number> | null>(null)
+  const draftCreationRef = useRef<Promise<string> | null>(null)
 
   const canSubmit = useMemo(() => {
     if (mode === "simple") return prompt.trim().length >= 10
@@ -216,6 +219,71 @@ export default function NewBriefPage() {
     }
   }
 
+  const buildRawPrompt = () => {
+    if (mode === "simple") {
+      return prompt.trim()
+    }
+
+    return [
+      category && `Category: ${category === "Other" ? customCategory : category}`,
+      industry && `Industry/Vertical: ${industry}`,
+      `Budget: ${formatBudget(budget)}`,
+      deadline && `Deadline: ${deadline}`,
+      companyName && `Company Name: ${companyName}`,
+      region && `Region: ${region}`,
+      city && `City: ${city}`,
+      description.trim(),
+    ].filter(Boolean).join("\n")
+  }
+
+  const ensureDraftBriefId = async () => {
+    if (briefId) return briefId
+    if (draftCreationRef.current) return draftCreationRef.current
+
+    const createDraft = (async () => {
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) throw new Error("You must be logged in.")
+
+      await ensureProfileExists(supabase, user)
+
+      const nextName = briefName.trim()
+      const nextCategory = mode === "detailed"
+        ? (category === "Other" ? customCategory.trim() : category.trim()) || null
+        : null
+
+      const { data: createdBrief, error } = await supabase
+        .from("briefs")
+        .insert({
+          user_id: user.id,
+          mode: mode ?? "detailed",
+          name: nextName.length > 0 ? nextName : null,
+          category: nextCategory,
+          raw_prompt: buildRawPrompt(),
+          status: "draft",
+        })
+        .select("id")
+        .single()
+
+      if (error || !createdBrief) {
+        throw new Error(error?.message ?? "Failed to create draft brief.")
+      }
+
+      setBriefId(createdBrief.id)
+      return createdBrief.id
+    })()
+
+    draftCreationRef.current = createDraft
+
+    try {
+      return await createDraft
+    } finally {
+      draftCreationRef.current = null
+    }
+  }
+
   const handleRunFinished = () => {
     if (!briefId) return
     router.push(`/brief/${briefId}`)
@@ -262,38 +330,55 @@ export default function NewBriefPage() {
       if (!user) throw new Error("You must be logged in.")
       await ensureProfileExists(supabase, user)
 
-      const rawPrompt = mode === "simple"
-        ? prompt.trim()
-        : [
-          category && `Category: ${category === "Other" ? customCategory : category}`,
-          industry && `Industry/Vertical: ${industry}`,
-          `Budget: ${formatBudget(budget)}`,
-          deadline && `Deadline: ${deadline}`,
-          companyName && `Company Name: ${companyName}`,
-          region && `Region: ${region}`,
-          city && `City: ${city}`,
-          description.trim(),
-        ].filter(Boolean).join("\n")
+      const rawPrompt = buildRawPrompt()
       const nextName = briefName.trim()
       const nextCategory = mode === "detailed"
         ? (category === "Other" ? customCategory.trim() : category.trim()) || null
         : null
 
-      const { data: brief, error: insertError } = await supabase
-        .from("briefs")
-        .insert({
-          user_id: user.id,
-          mode: mode ?? "simple",
-          name: nextName.length > 0 ? nextName : null,
-          category: nextCategory,
-          raw_prompt: rawPrompt,
-          status: "draft",
-        })
-        .select("id")
-        .single()
+      let targetBriefId = briefId
 
-      if (insertError || !brief) throw new Error(insertError?.message ?? "Failed to create brief.")
-      setBriefId(brief.id)
+      if (!targetBriefId) {
+        const { data: createdBrief, error: insertError } = await supabase
+          .from("briefs")
+          .insert({
+            user_id: user.id,
+            mode: mode ?? "simple",
+            name: nextName.length > 0 ? nextName : null,
+            category: nextCategory,
+            raw_prompt: rawPrompt,
+            status: "draft",
+          })
+          .select("id")
+          .single()
+
+        if (insertError || !createdBrief) {
+          throw new Error(insertError?.message ?? "Failed to create brief.")
+        }
+
+        targetBriefId = createdBrief.id
+        setBriefId(createdBrief.id)
+      } else {
+        const { error: updateDraftError } = await supabase
+          .from("briefs")
+          .update({
+            mode: mode ?? "simple",
+            name: nextName.length > 0 ? nextName : null,
+            category: nextCategory,
+            raw_prompt: rawPrompt,
+            status: "draft",
+          })
+          .eq("id", targetBriefId)
+          .eq("user_id", user.id)
+
+        if (updateDraftError) {
+          throw new Error(updateDraftError.message)
+        }
+      }
+
+      if (!targetBriefId) {
+        throw new Error("Failed to resolve brief id.")
+      }
 
       const normalizedResponse = await fetch("/api/brief/normalize", {
         method: "POST",
@@ -316,7 +401,7 @@ export default function NewBriefPage() {
           normalized_brief: normalizedWithDepth,
           weights: normalizedPayload.weights,
         })
-        .eq("id", brief.id)
+        .eq("id", targetBriefId)
       if (updateError) throw new Error(updateError.message)
 
       // Check for clarifications needed
@@ -325,7 +410,7 @@ export default function NewBriefPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            brief_id: brief.id,
+            brief_id: targetBriefId,
             normalized_brief: normalizedWithDepth,
             confidence: normalizedPayload.confidence,
           }),
@@ -344,7 +429,7 @@ export default function NewBriefPage() {
         return
       }
 
-      const nextRunId = await startPipeline(brief.id)
+      const nextRunId = await startPipeline(targetBriefId)
       setRunId(nextRunId)
       setRunStarted(true)
       setStep("searching")
@@ -425,8 +510,8 @@ export default function NewBriefPage() {
             className="w-full max-w-2xl"
           >
             <div className="mb-12 text-center">
-              <h1 className="mb-3 text-3xl font-semibold text-white">Create New Brief</h1>
-              <p className="text-[#919191]">Choose how you want to describe your sourcing needs</p>
+              <h1 className="mb-3 text-3xl font-semibold text-foreground">Create New Brief</h1>
+              <p className="text-muted-foreground">Choose how you want to describe your sourcing needs</p>
             </div>
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -435,7 +520,7 @@ export default function NewBriefPage() {
                 onClick={() => handleModeSelect("simple")}
                 whileHover={{ y: -3, scale: 1.015 }}
                 whileTap={{ scale: 0.99 }}
-                className="group relative rounded-2xl border border-[#1F1F1F] bg-[#0D0D0D] p-8 text-left transition-all duration-300 hover:border-indigo-500/50"
+                className="group relative rounded-2xl border border-border bg-card p-8 text-left transition-all duration-300 hover:border-indigo-500/50"
               >
                 <div className="absolute right-4 top-4 opacity-0 transition-opacity group-hover:opacity-100">
                   <ArrowRight className="h-5 w-5 text-indigo-400" />
@@ -443,13 +528,13 @@ export default function NewBriefPage() {
                 <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-indigo-500/10">
                   <Zap className="h-7 w-7 text-indigo-400" />
                 </div>
-                <h3 className="mb-2 text-xl font-medium text-white">Simple Mode</h3>
-                <p className="text-sm leading-relaxed text-[#919191]">
+                <h3 className="mb-2 text-xl font-medium text-foreground">Simple Mode</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">
                   Describe what you need in plain English. We&apos;ll turn it into a structured brief.
                 </p>
                 <div className="mt-6 flex items-center gap-2 text-sm text-indigo-400">
                   <span>Quick &amp; Easy</span>
-                  <span className="text-[#333]">•</span>
+                  <span className="text-muted-foreground">•</span>
                   <span>~5 min</span>
                 </div>
               </motion.button>
@@ -459,7 +544,7 @@ export default function NewBriefPage() {
                 onClick={() => handleModeSelect("detailed")}
                 whileHover={{ y: -3, scale: 1.015 }}
                 whileTap={{ scale: 0.99 }}
-                className="group relative rounded-2xl border border-[#1F1F1F] bg-[#0D0D0D] p-8 text-left transition-all duration-300 hover:border-indigo-500/50"
+                className="group relative rounded-2xl border border-border bg-card p-8 text-left transition-all duration-300 hover:border-indigo-500/50"
               >
                 <div className="absolute right-4 top-4 opacity-0 transition-opacity group-hover:opacity-100">
                   <ArrowRight className="h-5 w-5 text-indigo-400" />
@@ -467,13 +552,13 @@ export default function NewBriefPage() {
                 <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-indigo-500/10">
                   <Settings2 className="h-7 w-7 text-indigo-400" />
                 </div>
-                <h3 className="mb-2 text-xl font-medium text-white">Detailed Mode</h3>
-                <p className="text-sm leading-relaxed text-[#919191]">
+                <h3 className="mb-2 text-xl font-medium text-foreground">Detailed Mode</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">
                   Add detailed requirements like budget, timeline, and category preferences.
                 </p>
                 <div className="mt-6 flex items-center gap-2 text-sm text-indigo-400">
                   <span>Precise Results</span>
-                  <span className="text-[#333]">•</span>
+                  <span className="text-muted-foreground">•</span>
                   <span>10 min — 1 hr</span>
                 </div>
               </motion.button>
@@ -502,14 +587,14 @@ export default function NewBriefPage() {
                   setStep("select")
                   setMode(null)
                 }}
-                className="mb-4 text-sm text-[#919191] transition-colors hover:text-white"
+                className="mb-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 ← Back to mode selection
               </button>
-              <h1 className="mb-2 text-3xl font-semibold text-white">
+              <h1 className="mb-2 text-3xl font-semibold text-foreground">
                 {mode === "simple" ? "Describe Your Needs" : "Brief Details"}
               </h1>
-              <p className="text-[#919191]">
+              <p className="text-muted-foreground">
                 {mode === "simple"
                   ? "Tell us what you're looking for in your own words"
                   : "Fill in the details to get precise matches"}
@@ -517,33 +602,33 @@ export default function NewBriefPage() {
             </motion.div>
 
             <motion.form
-              className="rounded-2xl border border-[#1F1F1F] bg-[#0D0D0D] p-8"
+              className="rounded-2xl border border-border bg-card p-8"
               onSubmit={handleSubmit}
               variants={formContainerVariants}
               initial="hidden"
               animate="show"
             >
               <motion.div variants={formItemVariants}>
-                <label className="mb-2 block text-sm font-medium text-white">Brief Name (optional)</label>
+                <label className="mb-2 block text-sm font-medium text-foreground">Brief Name (optional)</label>
                 <input
                   type="text"
                   value={briefName}
                   onChange={(e) => setBriefName(e.target.value)}
                   placeholder="e.g. Q2 SEO Agency Search"
-                  className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
+                  className="w-full rounded-xl border border-input bg-input px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-indigo-500/50 focus:outline-none"
                 />
               </motion.div>
 
               {mode === "detailed" ? (
-                <motion.div variants={formItemVariants} className="mt-6 space-y-3 rounded-xl border border-[#333] bg-[#111] p-4">
-                  <p className="text-sm font-medium text-white">Search Mode</p>
+                <motion.div variants={formItemVariants} className="mt-6 space-y-3 rounded-xl border border-border bg-muted/40 p-4">
+                  <p className="text-sm font-medium text-foreground">Search Mode</p>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <button
                       type="button"
                       onClick={() => handleSearchDepthChange("standard")}
                       className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${searchDepth === "standard"
                           ? "border-indigo-500/60 bg-indigo-500/10 text-white"
-                          : "border-[#333] text-[#919191] hover:text-white"
+                          : "border-border text-muted-foreground hover:text-foreground"
                         }`}
                     >
                       <p className="font-medium">Quick</p>
@@ -554,7 +639,7 @@ export default function NewBriefPage() {
                       onClick={() => handleSearchDepthChange("deep")}
                       className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${searchDepth === "deep"
                           ? "border-indigo-500/60 bg-indigo-500/10 text-white"
-                          : "border-[#333] text-[#919191] hover:text-white"
+                          : "border-border text-muted-foreground hover:text-foreground"
                         }`}
                     >
                       <p className="font-medium">Thorough</p>
@@ -566,19 +651,19 @@ export default function NewBriefPage() {
 
               {mode === "simple" ? (
                 <motion.div variants={formItemVariants} className="mt-6">
-                  <label className="mb-2 block text-sm font-medium text-white">What are you looking for?</label>
+                  <label className="mb-2 block text-sm font-medium text-foreground">What are you looking for?</label>
                   <textarea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     placeholder="Describe your ideal vendor, partner, or service provider. Include any specific requirements, preferences, or constraints..."
                     rows={6}
-                    className="w-full resize-none rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
+                    className="w-full resize-none rounded-xl border border-input bg-input px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-indigo-500/50 focus:outline-none"
                   />
                 </motion.div>
               ) : (
                 <>
                   <motion.div variants={formItemVariants} className="mt-6">
-                    <label className="mb-2 block text-sm font-medium text-white">
+                    <label className="mb-2 block text-sm font-medium text-foreground">
                       <Tag className="mr-2 inline h-4 w-4 text-indigo-400" />
                       Category
                     </label>
@@ -589,13 +674,13 @@ export default function NewBriefPage() {
                         if (e.target.value !== "Other") setCustomCategory("")
                         if (!CITY_RELEVANT_CATEGORIES.has(e.target.value)) setCity("")
                       }}
-                      className="w-full cursor-pointer appearance-none rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white transition-colors focus:border-indigo-500/50 focus:outline-none"
+                      className="w-full cursor-pointer appearance-none rounded-xl border border-input bg-input px-4 py-3 text-foreground transition-colors focus:border-indigo-500/50 focus:outline-none"
                     >
-                      <option value="" className="bg-[#1A1A1A]">Select a category</option>
+                      <option value="" className="bg-input">Select a category</option>
                       {categories.map((cat) => (
-                        <option key={cat} value={cat} className="bg-[#1A1A1A]">{cat}</option>
+                        <option key={cat} value={cat} className="bg-input">{cat}</option>
                       ))}
-                      <option value="Other" className="bg-[#1A1A1A]">Other</option>
+                      <option value="Other" className="bg-input">Other</option>
                     </select>
                     <AnimatePresence initial={false}>
                       {category === "Other" ? (
@@ -612,7 +697,7 @@ export default function NewBriefPage() {
                             onChange={(e) => setCustomCategory(e.target.value)}
                             placeholder="Enter custom category"
                             required
-                            className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
+                            className="w-full rounded-xl border border-input bg-input px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-indigo-500/50 focus:outline-none"
                           />
                         </motion.div>
                       ) : null}
@@ -621,7 +706,7 @@ export default function NewBriefPage() {
 
                   <motion.div variants={formItemVariants} className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-white">
+                      <label className="mb-2 block text-sm font-medium text-foreground">
                         <Building2 className="mr-2 inline h-4 w-4 text-indigo-400" />
                         Company Name
                       </label>
@@ -630,11 +715,11 @@ export default function NewBriefPage() {
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
                         placeholder="e.g. Acme Corp"
-                        className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
+                        className="w-full rounded-xl border border-input bg-input px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-indigo-500/50 focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-white">
+                      <label className="mb-2 block text-sm font-medium text-foreground">
                         <Briefcase className="mr-2 inline h-4 w-4 text-indigo-400" />
                         Industry / Vertical
                       </label>
@@ -643,11 +728,11 @@ export default function NewBriefPage() {
                         value={industry}
                         onChange={(e) => setIndustry(e.target.value)}
                         placeholder="e.g. Healthcare, SaaS"
-                        className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
+                        className="w-full rounded-xl border border-input bg-input px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-indigo-500/50 focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-white">
+                      <label className="mb-2 block text-sm font-medium text-foreground">
                         <Globe className="mr-2 inline h-4 w-4 text-indigo-400" />
                         Region
                       </label>
@@ -656,7 +741,7 @@ export default function NewBriefPage() {
                         value={region}
                         onChange={(e) => setRegion(e.target.value)}
                         placeholder="e.g. North America, Global"
-                        className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
+                        className="w-full rounded-xl border border-input bg-input px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-indigo-500/50 focus:outline-none"
                       />
                     </div>
                     <AnimatePresence initial={false}>
@@ -667,7 +752,7 @@ export default function NewBriefPage() {
                           exit={{ opacity: 0, y: -6, filter: "blur(5px)" }}
                           transition={{ duration: 0.24, ease: "easeOut" }}
                         >
-                          <label className="mb-2 block text-sm font-medium text-white">
+                          <label className="mb-2 block text-sm font-medium text-foreground">
                             <MapPin className="mr-2 inline h-4 w-4 text-indigo-400" />
                             City
                           </label>
@@ -676,7 +761,7 @@ export default function NewBriefPage() {
                             value={city}
                             onChange={(e) => setCity(e.target.value)}
                             placeholder="e.g. San Francisco"
-                            className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
+                            className="w-full rounded-xl border border-input bg-input px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-indigo-500/50 focus:outline-none"
                           />
                         </motion.div>
                       ) : null}
@@ -684,7 +769,7 @@ export default function NewBriefPage() {
                   </motion.div>
 
                   <motion.div variants={formItemVariants} className="mt-6">
-                    <label className="mb-2 block text-sm font-medium text-white">
+                    <label className="mb-2 block text-sm font-medium text-foreground">
                       <DollarSign className="mr-2 inline h-4 w-4 text-indigo-400" />
                       Budget Range
                     </label>
@@ -696,18 +781,18 @@ export default function NewBriefPage() {
                         step={5000}
                         value={budget}
                         onChange={(e) => setBudget(Number(e.target.value))}
-                        className="h-3 w-full cursor-pointer appearance-none rounded-lg bg-[#333] accent-indigo-500"
+                        className="h-3 w-full cursor-pointer appearance-none rounded-lg bg-input accent-indigo-500"
                       />
                       <div className="flex justify-between text-sm">
-                        <span className="text-[#919191]">$5K</span>
-                        <span className="font-medium text-white">{formatBudget(budget)}</span>
-                        <span className="text-[#919191]">$500K+</span>
+                        <span className="text-muted-foreground">$5K</span>
+                        <span className="font-medium text-foreground">{formatBudget(budget)}</span>
+                        <span className="text-muted-foreground">$500K+</span>
                       </div>
                     </div>
                   </motion.div>
 
                   <motion.div variants={formItemVariants} className="mt-6">
-                    <label className="mb-2 block text-sm font-medium text-white">
+                    <label className="mb-2 block text-sm font-medium text-foreground">
                       <Calendar className="mr-2 inline h-4 w-4 text-indigo-400" />
                       Target Deadline
                     </label>
@@ -715,12 +800,12 @@ export default function NewBriefPage() {
                       type="date"
                       value={deadline}
                       onChange={(e) => setDeadline(e.target.value)}
-                      className="w-full rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white transition-colors focus:border-indigo-500/50 focus:outline-none"
+                      className="w-full rounded-xl border border-input bg-input px-4 py-3 text-foreground transition-colors focus:border-indigo-500/50 focus:outline-none"
                     />
                   </motion.div>
 
                   <motion.div variants={formItemVariants} className="mt-6">
-                    <label className="mb-2 block text-sm font-medium text-white">
+                    <label className="mb-2 block text-sm font-medium text-foreground">
                       <FileText className="mr-2 inline h-4 w-4 text-indigo-400" />
                       Project Description
                     </label>
@@ -729,8 +814,22 @@ export default function NewBriefPage() {
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="Describe your project requirements, goals, and any specific criteria..."
                       rows={4}
-                      className="w-full resize-none rounded-xl border border-[#333] bg-[#1A1A1A] px-4 py-3 text-white placeholder-[#666] transition-colors focus:border-indigo-500/50 focus:outline-none"
+                      className="w-full resize-none rounded-xl border border-input bg-input px-4 py-3 text-foreground placeholder:text-muted-foreground transition-colors focus:border-indigo-500/50 focus:outline-none"
                     />
+                  </motion.div>
+
+                  <motion.div variants={formItemVariants} className="mt-6">
+                    <AttachmentUploader
+                      briefId={briefId}
+                      disabled={loading}
+                      onEnsureBrief={ensureDraftBriefId}
+                      onCountChange={setAttachmentCount}
+                    />
+                    {attachmentCount > 0 ? (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {attachmentCount} attachment{attachmentCount === 1 ? "" : "s"} will be included with this brief.
+                      </p>
+                    ) : null}
                   </motion.div>
                 </>
               )}
@@ -740,7 +839,7 @@ export default function NewBriefPage() {
                 type="submit"
                 disabled={!canSubmit || loading}
                 whileTap={{ scale: 0.985 }}
-                className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-4 font-medium text-white transition-all duration-200 hover:bg-indigo-700 disabled:bg-[#333] disabled:text-[#666]"
+                className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-4 font-medium text-white transition-all duration-200 hover:bg-indigo-700 disabled:bg-muted disabled:text-muted-foreground"
               >
                 <span>Find Matches</span>
                 <ArrowRight className="h-5 w-5" />

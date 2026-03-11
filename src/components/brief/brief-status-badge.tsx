@@ -11,12 +11,12 @@ const labelMap: Record<BriefStatus, string> = {
 }
 
 const classMap: Record<BriefStatus, string> = {
-  draft: "bg-[#333] text-[#919191]",
-  clarifying: "bg-amber-500/20 text-amber-400",
-  running: "bg-blue-500/20 text-blue-400",
-  complete: "bg-emerald-500/20 text-emerald-400",
-  error: "bg-red-500/20 text-red-400",
-  cancelled: "bg-slate-500/20 text-slate-300",
+  draft: "bg-muted text-muted-foreground",
+  clarifying: "border border-amber-500/35 bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  running: "border border-blue-500/35 bg-blue-500/15 text-blue-700 dark:text-blue-300",
+  complete: "border border-emerald-500/35 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  error: "border border-red-500/35 bg-red-500/15 text-red-700 dark:text-red-300",
+  cancelled: "border border-slate-500/35 bg-slate-500/15 text-slate-700 dark:text-slate-300",
 }
 
 export function BriefStatusBadge({ status }: { status: BriefStatus }) {

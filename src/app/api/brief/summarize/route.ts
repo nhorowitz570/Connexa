@@ -4,6 +4,7 @@ import { MODELS } from "@/lib/constants"
 import { callOpenRouter } from "@/lib/openrouter"
 import { NormalizedBriefSchema } from "@/lib/schemas"
 import { createClient } from "@/lib/supabase/server"
+import { getTemporalContext } from "@/lib/temporal-context"
 import type { NormalizedBrief } from "@/types"
 
 type SummarizeInput = {
@@ -69,12 +70,14 @@ export async function POST(request: Request) {
     let summary = fallbackSummary(normalized)
     if (process.env.OPENROUTER_API_KEY) {
       try {
+        const temporalContext = getTemporalContext()
         const response = await callOpenRouter(
           [
             {
               role: "system",
               content:
-                "Summarize this B2B sourcing brief in 2-5 sentences for a business user. Use plain language and include scope, budget, geography, and constraints when available.",
+                "Summarize this B2B sourcing brief in 2-5 sentences for a business user. Use plain language and include scope, budget, geography, and constraints when available. " +
+                temporalContext,
             },
             {
               role: "user",

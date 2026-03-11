@@ -17,6 +17,7 @@ type HistoryBriefRow = {
   createdAt: string
   score: number | null
   durationLabel: string | null
+  attachmentCount: number
 }
 
 type HistoryClientProps = {
@@ -70,6 +71,7 @@ export function HistoryClient({ briefs }: HistoryClientProps) {
             createdAt={brief.createdAt}
             score={brief.score}
             durationLabel={brief.durationLabel}
+            attachmentCount={brief.attachmentCount}
             onSelect={(id) => setSelectedBrief(id)}
           />
         ))}

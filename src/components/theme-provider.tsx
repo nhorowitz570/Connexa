@@ -13,7 +13,6 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
       attribute="class"
       defaultTheme="dark"
       enableSystem={false}
-      disableTransitionOnChange
       storageKey="connexa-theme"
     >
       {children}

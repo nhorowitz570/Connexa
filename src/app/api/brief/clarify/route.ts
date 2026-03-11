@@ -9,6 +9,7 @@ import {
 import { callOpenRouterWithTimeout } from "@/lib/openrouter-with-timeout"
 import { NormalizedBriefSchema, QuestionsPayloadSchema } from "@/lib/schemas"
 import { createClient } from "@/lib/supabase/server"
+import { getTemporalContext } from "@/lib/temporal-context"
 import type { NormalizedBrief, QuestionsPayload } from "@/types"
 
 type ClarifyInput = {
@@ -36,11 +37,13 @@ async function generateClarificationsWithModel(
   }
 
   try {
+    const temporalContext = getTemporalContext()
     const response = await callOpenRouterWithTimeout(
       [
         {
           role: "system",
           content: `You generate dynamic clarification questions for B2B sourcing briefs.
+${temporalContext}
 Return ONLY valid JSON matching:
 {
   "type": "connexa.clarifications.v1",
@@ -71,7 +74,9 @@ Rules:
 - Do not ask for data already clearly specified in the brief.
 - Use "high" priority for blockers, "medium" for meaningful refinements, "low" for nice-to-have.
 - For "multiple_choice" and "select", include at least 2 options.
-- Use fieldPath values that map into normalized brief structure (timeline.*, geography.*, constraints, optional.*).`,
+- Use fieldPath values that map into normalized brief structure (timeline.*, geography.*, constraints, optional.*).
+- Do not ask timeline or deadline questions that are already in the past.
+- Interpret relative time phrasing against today's date.`,
         },
         {
           role: "user",

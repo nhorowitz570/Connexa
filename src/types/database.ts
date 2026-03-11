@@ -223,6 +223,41 @@ export type Database = {
           created_at?: string
         }
       }
+      brief_attachments: {
+        Row: {
+          id: string
+          brief_id: string
+          user_id: string
+          file_name: string
+          file_type: string
+          file_size: number
+          storage_path: string
+          text_content: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          brief_id: string
+          user_id: string
+          file_name: string
+          file_type: string
+          file_size: number
+          storage_path: string
+          text_content?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          brief_id?: string
+          user_id?: string
+          file_name?: string
+          file_type?: string
+          file_size?: number
+          storage_path?: string
+          text_content?: string | null
+          created_at?: string
+        }
+      }
       chat_threads: {
         Row: {
           id: string
