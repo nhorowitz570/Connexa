@@ -627,7 +627,7 @@ export default function NewBriefPage() {
                       type="button"
                       onClick={() => handleSearchDepthChange("standard")}
                       className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${searchDepth === "standard"
-                          ? "border-indigo-500/60 bg-indigo-500/10 text-white"
+                          ? "border-indigo-500/60 bg-indigo-500/10 text-indigo-900 dark:text-white"
                           : "border-border text-muted-foreground hover:text-foreground"
                         }`}
                     >
@@ -638,7 +638,7 @@ export default function NewBriefPage() {
                       type="button"
                       onClick={() => handleSearchDepthChange("deep")}
                       className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${searchDepth === "deep"
-                          ? "border-indigo-500/60 bg-indigo-500/10 text-white"
+                          ? "border-indigo-500/60 bg-indigo-500/10 text-indigo-900 dark:text-white"
                           : "border-border text-muted-foreground hover:text-foreground"
                         }`}
                     >

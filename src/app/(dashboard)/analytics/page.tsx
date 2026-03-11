@@ -94,11 +94,11 @@ export default async function AnalyticsPage() {
     return (
       <section className="flex flex-col gap-6 animate-in fade-in duration-500">
         <div>
-          <h1 className="text-2xl font-semibold text-white">AI Actionable Core Insights</h1>
-          <p className="mt-1 text-sm text-[#919191]">Run a few searches to unlock this dashboard.</p>
+          <h1 className="text-2xl font-semibold text-foreground dark:text-white">AI Actionable Core Insights</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Run a few searches to unlock this dashboard.</p>
         </div>
         <Card>
-          <CardContent className="space-y-3 pt-6 text-sm text-[#919191]">
+          <CardContent className="space-y-3 pt-6 text-sm text-muted-foreground">
              <p>No analytics data yet. Start a search, then refresh analytics.</p>
             <AnalyticsRefreshButton />
           </CardContent>
