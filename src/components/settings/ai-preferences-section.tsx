@@ -55,15 +55,15 @@ export function AiPreferencesSection({
   }
 
   return (
-    <section className="glass-card space-y-5 rounded-2xl border border-white/10 p-5">
+    <section className="glass-card space-y-5 rounded-2xl border border-border p-5">
       <div>
-        <h2 className="text-xl font-semibold text-white">AI Preferences</h2>
-        <p className="text-sm text-[#9ca3b4]">Set defaults for how Connexa responds and follows up.</p>
+        <h2 className="text-xl font-semibold text-foreground">AI Preferences</h2>
+        <p className="text-sm text-muted-foreground">Set defaults for how Connexa responds and follows up.</p>
       </div>
 
-      <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-white">
-          <Bot className="h-4 w-4 text-indigo-300" />
+      <div className="space-y-2 rounded-xl border border-border bg-muted/70 p-3 dark:border-white/10 dark:bg-black/20">
+        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <Bot className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
           Assistant Preferences
         </div>
         <div className="flex flex-wrap gap-2">
@@ -75,8 +75,8 @@ export function AiPreferencesSection({
               className={cn(
                 "min-h-11 rounded-lg border px-3 py-2 text-xs font-medium capitalize",
                 verbosity === item
-                  ? "border-indigo-400/40 bg-indigo-500/15 text-white"
-                  : "border-white/10 text-[#9ca3b4] hover:text-white",
+                  ? "border-indigo-400/40 bg-indigo-500/12 text-indigo-900 dark:bg-indigo-500/15 dark:text-white"
+                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground dark:border-white/10 dark:hover:text-white",
               )}
             >
               {item}
@@ -85,7 +85,7 @@ export function AiPreferencesSection({
         </div>
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+      <div className="rounded-xl border border-border bg-muted/70 p-3 dark:border-white/10 dark:bg-black/20">
         <div className="flex items-start gap-3">
           <Checkbox
             id="ai-auto-clarify"
@@ -94,10 +94,10 @@ export function AiPreferencesSection({
             className="mt-1"
           />
           <div className="space-y-1">
-            <Label htmlFor="ai-auto-clarify" className="text-sm font-medium text-white">
+            <Label htmlFor="ai-auto-clarify" className="text-sm font-medium text-foreground">
               Auto-ask clarification questions
             </Label>
-            <p className="text-xs text-[#8290aa]">
+            <p className="text-xs text-muted-foreground">
               When enabled, Connexa asks follow-up questions when your brief is unclear.
             </p>
           </div>

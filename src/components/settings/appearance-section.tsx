@@ -57,7 +57,7 @@ export function AppearanceSection({ userId, initialThemePreference }: Appearance
           className={cn(
             "min-h-11 rounded-xl border px-3 py-2 text-left",
             themePreference === "dark"
-              ? "border-indigo-400/40 bg-indigo-500/15 text-white"
+              ? "border-indigo-400/40 bg-indigo-500/12 text-indigo-900 dark:bg-indigo-500/15 dark:text-white"
               : "border-border bg-muted/40 text-muted-foreground hover:text-foreground",
           )}
         >
@@ -74,7 +74,7 @@ export function AppearanceSection({ userId, initialThemePreference }: Appearance
           className={cn(
             "min-h-11 rounded-xl border px-3 py-2 text-left",
             themePreference === "light"
-              ? "border-indigo-400/40 bg-indigo-500/15 text-foreground"
+              ? "border-indigo-400/40 bg-indigo-500/12 text-indigo-900 dark:bg-indigo-500/15 dark:text-foreground"
               : "border-border bg-muted/40 text-muted-foreground hover:text-foreground",
           )}
         >

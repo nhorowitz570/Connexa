@@ -90,13 +90,13 @@ export function CreditPurchaseDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-white/10 bg-[#101620] text-[#dce4f5]">
+      <DialogContent className="border-border bg-popover text-popover-foreground dark:border-white/10 dark:bg-[#101620] dark:text-[#dce4f5]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-white">
-            <Wallet className="h-4 w-4 text-indigo-300" />
+          <DialogTitle className="flex items-center gap-2 text-foreground dark:text-white">
+            <Wallet className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
             Buy Additional Searches
           </DialogTitle>
-          <DialogDescription className="text-[#9aa6bf]">{heading}</DialogDescription>
+          <DialogDescription className="text-muted-foreground dark:text-[#9aa6bf]">{heading}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
@@ -106,28 +106,28 @@ export function CreditPurchaseDialog({
               type="button"
               onClick={() => void startPurchase(pkg.credits)}
               disabled={submittingCredits !== null}
-              className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-colors hover:border-indigo-400/40 hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-between rounded-xl border border-border bg-muted/50 px-4 py-3 text-left transition-colors hover:border-indigo-400/40 hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5"
             >
               <span>
-                <p className="text-sm font-medium text-white">{pkg.label}</p>
-                <p className="text-xs text-[#9aa6bf]">One-time purchase</p>
+                <p className="text-sm font-medium text-foreground dark:text-white">{pkg.label}</p>
+                <p className="text-xs text-muted-foreground dark:text-[#9aa6bf]">One-time purchase</p>
               </span>
-              <span className="text-sm font-semibold text-indigo-200">{formatPrice(pkg.price_cents)}</span>
+              <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-200">{formatPrice(pkg.price_cents)}</span>
             </button>
           ))}
         </div>
 
         <DialogFooter>
-          <p className="text-xs text-[#8d99b0]">
+          <p className="text-xs text-muted-foreground dark:text-[#8d99b0]">
             If Stripe is not configured, purchase requests are saved as pending and checkout is marked coming soon.
           </p>
           {submittingCredits !== null ? (
-            <div className="flex items-center gap-2 text-xs text-[#9aa6bf]">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground dark:text-[#9aa6bf]">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Preparing purchase...
             </div>
           ) : null}
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="border-white/15">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="border-border dark:border-white/15">
             Close
           </Button>
         </DialogFooter>

@@ -310,7 +310,7 @@ export function ChatView() {
   }
 
   return (
-    <div className="glass-card flex h-full overflow-hidden rounded-3xl border border-white/10 bg-[#0b1019]/75">
+    <div className="glass-card flex h-full overflow-hidden rounded-3xl border border-border bg-card/80 dark:border-white/10 dark:bg-[#0b1019]/75">
       <div className="hidden w-72 md:block">
         <ThreadList
           threads={threads}
@@ -325,15 +325,15 @@ export function ChatView() {
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="glass-card flex items-center justify-between border-b border-white/10 px-3 py-2">
+        <div className="glass-card flex items-center justify-between border-b border-border px-3 py-2 dark:border-white/10">
           <div className="flex items-center gap-2">
             <Sheet open={mobileThreadsOpen} onOpenChange={setMobileThreadsOpen}>
               <SheetTrigger asChild>
-                <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl border-white/15 bg-white/5 md:hidden">
+                <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl border-border bg-background/80 md:hidden dark:border-white/15 dark:bg-white/5">
                   <Menu className="h-4 w-4" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="border-r border-white/10 bg-[#0b1019]/95 p-0">
+              <SheetContent side="left" className="border-r border-border bg-background/95 p-0 dark:border-white/10 dark:bg-[#0b1019]/95">
                 <ThreadList
                   threads={threads}
                   activeThreadId={activeThreadId}
@@ -352,7 +352,7 @@ export function ChatView() {
             </Sheet>
             <div>
               <p className="text-sm font-semibold">{activeThread?.title ?? "Assistant"}</p>
-              <p className="text-xs text-[#919191]">Ask questions about briefs, matches, and strategy</p>
+              <p className="text-xs text-muted-foreground">Ask questions about briefs, matches, and strategy</p>
             </div>
           </div>
           <ExportThreadDropdown thread={activeThread} messages={messages} />
@@ -367,9 +367,9 @@ export function ChatView() {
         >
           <div className="space-y-3 p-3 sm:p-4">
             {loading ? (
-              <p className="text-sm text-[#919191]">Loading messages...</p>
+              <p className="text-sm text-muted-foreground">Loading messages...</p>
             ) : messages.length === 0 ? (
-              <p className="text-sm text-[#919191]">Start a conversation with your assistant.</p>
+              <p className="text-sm text-muted-foreground">Start a conversation with your assistant.</p>
             ) : (
               messages.map((message) => <ChatMessage key={message.id} message={message} />)
             )}

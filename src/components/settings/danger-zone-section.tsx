@@ -43,13 +43,13 @@ export function DangerZoneSection() {
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border border-rose-400/35 bg-rose-500/5 p-5">
+    <section className="space-y-4 rounded-2xl border border-rose-300/60 bg-rose-50/80 p-5 dark:border-rose-400/35 dark:bg-rose-500/5">
       <div className="flex items-center gap-2">
-        <TriangleAlert className="h-4 w-4 text-rose-300" />
-        <h2 className="text-xl font-semibold text-rose-200">Danger Zone</h2>
+        <TriangleAlert className="h-4 w-4 text-rose-700 dark:text-rose-300" />
+        <h2 className="text-xl font-semibold text-rose-900 dark:text-rose-200">Danger Zone</h2>
       </div>
 
-      <p className="text-sm text-rose-100/80">
+      <p className="text-sm text-rose-800/85 dark:text-rose-100/80">
         Deleting your account permanently removes briefs, runs, chat history, and all saved settings.
       </p>
 

@@ -64,8 +64,8 @@ export function SettingsShell({
   return (
     <section className="space-y-5 pb-6">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Settings</h1>
-        <p className="text-sm text-[#9ca3b4]">Manage profile, AI defaults, appearance, and account options.</p>
+        <h1 className="text-2xl font-semibold text-foreground">Settings</h1>
+        <p className="text-sm text-muted-foreground">Manage profile, AI defaults, appearance, and account options.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-[240px_minmax(0,1fr)] md:gap-6">

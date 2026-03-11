@@ -165,10 +165,10 @@ export function ConnectedAccountsSection({
   const upworkAvailable = resolvedAccounts.upwork?.available ?? false
 
   return (
-    <section className="glass-card space-y-5 rounded-2xl border border-white/10 p-5">
+    <section className="glass-card space-y-5 rounded-2xl border border-border p-5">
       <div>
-        <h2 className="text-xl font-semibold text-white">Connected Accounts</h2>
-        <p className="text-sm text-[#9ca3b4]">Connect external platforms to enrich your searches.</p>
+        <h2 className="text-xl font-semibold text-foreground">Connected Accounts</h2>
+        <p className="text-sm text-muted-foreground">Connect external platforms to enrich your searches.</p>
       </div>
 
       <AccountRow
@@ -279,14 +279,14 @@ function AccountRow({
   const isConnected = statusLabel.toLowerCase() === "connected"
 
   return (
-    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+    <div className="rounded-xl border border-border bg-muted/70 p-3 dark:border-white/10 dark:bg-black/20">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="mb-1 flex items-center gap-2 text-sm font-medium text-white">
-            <span className="rounded-md bg-white/10 p-1 text-[#b5c1d7]">{icon}</span>
+          <div className="mb-1 flex items-center gap-2 text-sm font-medium text-foreground">
+            <span className="rounded-md bg-muted p-1 text-indigo-700 dark:bg-white/10 dark:text-[#b5c1d7]">{icon}</span>
             {name}
           </div>
-          <p className="text-xs text-[#8290aa]">{description}</p>
+          <p className="text-xs text-muted-foreground">{description}</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -294,8 +294,8 @@ function AccountRow({
             className={cn(
               "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs",
               isConnected
-                ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-200"
-                : "border-white/10 bg-white/5 text-[#9ca3b4]",
+                ? "border-emerald-400/40 bg-emerald-500/12 text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-200"
+                : "border-border bg-background/70 text-muted-foreground dark:border-white/10 dark:bg-white/5",
             )}
           >
             {isConnected ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
@@ -305,7 +305,7 @@ function AccountRow({
           <Button
             disabled={disabled}
             variant="outline"
-            className="h-9 rounded-lg border-white/10"
+            className="h-9 rounded-lg border-border dark:border-white/10"
             onClick={onAction}
           >
             {loading ? "Working..." : actionLabel}

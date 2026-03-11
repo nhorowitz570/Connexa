@@ -460,7 +460,7 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
                       }}
                       className={cn(
                         "w-full rounded-lg border border-border px-2 py-2 text-left text-xs text-muted-foreground",
-                        "transition-colors hover:border-indigo-400/30 hover:bg-indigo-500/10 hover:text-white",
+                        "transition-colors hover:border-indigo-400/30 hover:bg-indigo-500/10 hover:text-foreground dark:hover:text-white",
                       )}
                     >
                       Press Enter to view all history results for &quot;{trimmedSearchTerm}&quot;
@@ -486,7 +486,7 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
             <button
                 type="button"
                 onClick={() => setPurchaseDialogOpen(true)}
-                className="rounded-md border border-indigo-400/30 bg-indigo-500/10 px-2 py-0.5 text-[11px] text-indigo-200 transition-colors hover:bg-indigo-500/20"
+                className="rounded-md border border-indigo-400/40 bg-indigo-500/12 px-2 py-0.5 text-[11px] text-indigo-700 transition-colors hover:bg-indigo-500/18 dark:border-indigo-400/30 dark:bg-indigo-500/10 dark:text-indigo-200 dark:hover:bg-indigo-500/20"
             >
               Buy
             </button>

@@ -79,11 +79,11 @@ export function ChatMessage({ message }: ChatMessageProps) {
           "max-w-[95%] rounded-xl border px-3 py-2 md:max-w-[85%]",
           isUser
             ? "border-indigo-400/20 bg-indigo-600 text-white"
-            : "border-[#30363D] bg-[#161B22] text-white",
+            : "border-border bg-muted/70 text-foreground dark:border-[#30363D] dark:bg-[#161B22] dark:text-white",
         )}
       >
         {!isUser ? (
-          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-[#9fb3d9]">
+          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-indigo-500/12 px-2 py-0.5 text-[11px] text-indigo-700 dark:bg-white/5 dark:text-[#9fb3d9]">
             <Sparkles className="h-3 w-3" />
             Connexa Assistant
           </div>
@@ -91,14 +91,14 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
         {showAssistantSkeleton ? (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs text-[#9aa4b2]">
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-300" />
+            <div className="flex items-center gap-2 text-xs text-muted-foreground dark:text-[#9aa4b2]">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-500 dark:text-indigo-300" />
               <span>Generating response...</span>
             </div>
             <div className="space-y-1.5">
-              <div className="h-3 w-11/12 animate-pulse rounded bg-white/10" />
-              <div className="h-3 w-4/5 animate-pulse rounded bg-white/10" />
-              <div className="h-3 w-3/5 animate-pulse rounded bg-white/10" />
+              <div className="h-3 w-11/12 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-4/5 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-3/5 animate-pulse rounded bg-muted" />
             </div>
           </div>
         ) : (
@@ -113,7 +113,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
                     <MarkdownContent
                       key={`text-${index}`}
                       content={segment.value}
-                      className={isUser ? "[&_a]:text-white" : "[&_p]:text-[#d6dce8]"}
+                      className={isUser ? "[&_a]:text-white" : "[&_p]:text-foreground dark:[&_p]:text-[#d6dce8]"}
                     />
                   )
                 })}
@@ -121,7 +121,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
             ) : (
               <MarkdownContent
                 content={visibleAssistantContent}
-                className={isUser ? "[&_a]:text-white" : "[&_p]:text-[#d6dce8] [&_li]:text-[#d6dce8]"}
+                className={isUser ? "[&_a]:text-white" : "[&_p]:text-foreground [&_li]:text-foreground dark:[&_p]:text-[#d6dce8] dark:[&_li]:text-[#d6dce8]"}
               />
             )}
           </motion.div>
@@ -131,14 +131,14 @@ export function ChatMessage({ message }: ChatMessageProps) {
           <button
             type="button"
             onClick={() => setExpanded((current) => !current)}
-            className="mt-1 text-xs text-indigo-300 transition-colors hover:text-indigo-200"
+            className="mt-1 text-xs text-indigo-700 transition-colors hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200"
           >
             {expanded ? "Show less" : "Show more"}
           </button>
         ) : null}
 
         {message.attachments.length > 0 ? (
-          <div className="mt-2 space-y-1 rounded-lg border border-white/10 bg-black/15 p-2 text-xs">
+          <div className="mt-2 space-y-1 rounded-lg border border-border bg-background/70 p-2 text-xs dark:border-white/10 dark:bg-black/15">
             {message.attachments.map((attachment, index) => (
               <div key={`${attachment.name}-${index}`} className="flex items-center gap-1">
                 <Paperclip className="h-3 w-3" />
@@ -156,7 +156,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
         {!isUser && !showAssistantSkeleton && assistantBriefRefs.length > 0 ? (
           <div className="mt-2 space-y-1">
-            <p className="text-[11px] uppercase tracking-wide text-[#8B949E]">Referenced Briefs</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground dark:text-[#8B949E]">Referenced Briefs</p>
             <div className="flex flex-wrap gap-2">
               {assistantBriefRefs.map((briefId) => (
                 <MentionCard
@@ -171,7 +171,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
         {!isUser && !showAssistantSkeleton && message.content.trim().length > 0 ? (
           <>
-            <hr className="my-2 border-[#2A2A2A]" />
+            <hr className="my-2 border-border dark:border-[#2A2A2A]" />
             <CopyButton text={message.content} />
           </>
         ) : null}
@@ -206,7 +206,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={handleCopy}
-      className="flex items-center gap-1.5 text-xs text-[#919191] transition-colors hover:text-white"
+      className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground dark:hover:text-white"
     >
       {copied ? (
         <>

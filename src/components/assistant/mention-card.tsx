@@ -68,18 +68,18 @@ export function MentionCard({ briefId, compact = false }: MentionCardProps) {
   }, [brief])
 
   const wrapperClass = compact
-    ? "my-1 inline-flex max-w-full items-center gap-1 rounded-full border border-[#2a3038] bg-[#111721] px-2 py-0.5 text-[11px] text-[#d0d9e8]"
-    : "my-1 inline-flex max-w-full items-center gap-1 rounded-full border border-[#30363D] bg-[#161B22] px-2 py-1 text-xs text-[#E6EDF3]"
+    ? "my-1 inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-muted/70 px-2 py-0.5 text-[11px] text-foreground dark:border-[#2a3038] dark:bg-[#111721] dark:text-[#d0d9e8]"
+    : "my-1 inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-muted/70 px-2 py-1 text-xs text-foreground dark:border-[#30363D] dark:bg-[#161B22] dark:text-[#E6EDF3]"
 
   const statusClass = compact
-    ? "rounded-full bg-[#1F1F1F] px-1.5 py-0.5 text-[9px] uppercase text-[#8B949E]"
-    : "rounded-full bg-[#1F1F1F] px-1.5 py-0.5 text-[10px] uppercase text-[#8B949E]"
+    ? "rounded-full bg-muted px-1.5 py-0.5 text-[9px] uppercase text-muted-foreground dark:bg-[#1F1F1F] dark:text-[#8B949E]"
+    : "rounded-full bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground dark:bg-[#1F1F1F] dark:text-[#8B949E]"
 
   const iconClass = compact ? "h-3 w-3" : "h-3 w-3"
 
   if (!brief) {
     return (
-      <span className={compact ? `${wrapperClass} text-[#8B949E]` : "my-1 inline-flex max-w-full items-center gap-1 rounded-full border border-[#30363D] bg-[#161B22] px-2 py-1 text-xs text-[#8B949E]"}>
+      <span className={compact ? `${wrapperClass} text-muted-foreground dark:text-[#8B949E]` : "my-1 inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-muted/70 px-2 py-1 text-xs text-muted-foreground dark:border-[#30363D] dark:bg-[#161B22] dark:text-[#8B949E]"}>
         <FileText className={iconClass} />
         {missing ? "Unknown brief" : label}
       </span>
@@ -89,7 +89,7 @@ export function MentionCard({ briefId, compact = false }: MentionCardProps) {
   return (
     <Link
       href={`/brief/${brief.id}`}
-      className={`${wrapperClass} hover:border-[#6366F1] hover:text-white`}
+      className={`${wrapperClass} hover:border-indigo-500 hover:text-foreground dark:hover:border-[#6366F1] dark:hover:text-white`}
     >
       <FileText className={iconClass} />
       <span className="truncate">{label}</span>

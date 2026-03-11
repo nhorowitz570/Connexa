@@ -70,7 +70,7 @@ export function ChatInput({ disabled, onSend }: ChatInputProps) {
 
   return (
     <form
-      className="glass-card sticky bottom-0 space-y-3 border-t border-white/10 bg-[#0b1019]/95 p-3 backdrop-blur-2xl"
+      className="glass-card sticky bottom-0 space-y-3 border-t border-border bg-card/95 p-3 backdrop-blur-2xl dark:border-white/10 dark:bg-[#0b1019]/95"
       onSubmit={(event) => void handleSubmit(event)}
     >
       {attachments.length > 0 ? (
@@ -109,7 +109,7 @@ export function ChatInput({ disabled, onSend }: ChatInputProps) {
             updateMentionState(next)
           }}
           placeholder="Ask about your briefs, results, or strategy..."
-          className="min-h-[88px] resize-none border-white/10 bg-[#0f1624] pr-14 text-white placeholder:text-[#7f8aa3]"
+          className="min-h-[88px] resize-none border-input bg-background pr-14 text-foreground placeholder:text-muted-foreground dark:border-white/10 dark:bg-[#0f1624] dark:text-white dark:placeholder:text-[#7f8aa3]"
           rows={composerRows}
           disabled={disabled}
         />
@@ -160,7 +160,7 @@ export function ChatInput({ disabled, onSend }: ChatInputProps) {
         </Button>
       </div>
 
-      <p className="text-[11px] text-[#8a94a8]">
+      <p className="text-[11px] text-muted-foreground">
         AI can make mistakes. Double-check important details before acting on suggestions.
       </p>
     </form>

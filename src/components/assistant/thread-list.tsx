@@ -39,10 +39,10 @@ export function ThreadList({
 
   return (
     <>
-      <aside className="glass-card flex h-full flex-col rounded-2xl border border-white/10 bg-[#111928]/70">
-        <div className="border-b border-white/10 p-3">
+      <aside className="glass-card flex h-full flex-col rounded-2xl border border-border bg-card/75 dark:border-white/10 dark:bg-[#111928]/70">
+        <div className="border-b border-border p-3 dark:border-white/10">
           <Button
-            className="h-11 w-full rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-[#3b3f46] disabled:text-[#a3a3a3]"
+            className="h-11 w-full rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground dark:disabled:bg-[#3b3f46] dark:disabled:text-[#a3a3a3]"
             onClick={onNewThread}
             disabled={newThreadDisabled}
           >
@@ -53,7 +53,7 @@ export function ThreadList({
 
         <div className="space-y-1 overflow-y-auto p-2">
           {threads.length === 0 ? (
-            <p className="px-2 py-3 text-sm text-[#919191]">No chats yet.</p>
+            <p className="px-2 py-3 text-sm text-muted-foreground">No chats yet.</p>
           ) : (
             threads.map((thread) => {
               const active = thread.id === activeThreadId
@@ -65,8 +65,8 @@ export function ThreadList({
                     className={cn(
                       "min-h-11 min-w-0 flex-1 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
                       active
-                        ? "border-indigo-400/50 bg-indigo-500/15 text-white"
-                        : "border-transparent text-[#919191] hover:border-white/10 hover:bg-white/5 hover:text-white",
+                        ? "border-indigo-400/50 bg-indigo-500/12 text-indigo-900 dark:bg-indigo-500/15 dark:text-white"
+                        : "border-transparent text-muted-foreground hover:border-border hover:bg-muted/70 hover:text-foreground dark:hover:border-white/10 dark:hover:bg-white/5 dark:hover:text-white",
                     )}
                   >
                     <p className="truncate font-medium">{thread.title}</p>
@@ -78,7 +78,7 @@ export function ThreadList({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-[#919191] opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                    className="h-8 w-8 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
                     onClick={() => setPendingDeleteThreadId(thread.id)}
                     aria-label={`Delete ${thread.title}`}
                   >

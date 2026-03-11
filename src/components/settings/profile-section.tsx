@@ -40,19 +40,19 @@ export function ProfileSection({ userId, email, initialFullName }: ProfileSectio
   }
 
   return (
-    <section className="glass-card space-y-5 rounded-2xl border border-white/10 p-5">
+    <section className="glass-card space-y-5 rounded-2xl border border-border p-5">
       <div>
-        <h2 className="text-xl font-semibold text-white">Profile</h2>
-        <p className="text-sm text-[#9ca3b4]">Update your basic account information.</p>
+        <h2 className="text-xl font-semibold text-foreground">Profile</h2>
+        <p className="text-sm text-muted-foreground">Update your basic account information.</p>
       </div>
 
-      <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-200">
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/70 p-3 dark:border-white/10 dark:bg-black/20">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-indigo-500/15 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200">
           <UserRound className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-sm font-medium text-white">Profile avatar</p>
-          <p className="text-xs text-[#8290aa]">Avatar upload is coming soon.</p>
+          <p className="text-sm font-medium text-foreground">Profile avatar</p>
+          <p className="text-xs text-muted-foreground">Avatar upload is coming soon.</p>
         </div>
       </div>
 
@@ -63,13 +63,18 @@ export function ProfileSection({ userId, email, initialFullName }: ProfileSectio
             id="settings-full-name"
             value={fullName}
             onChange={(event) => setFullName(event.target.value)}
-            className="h-11 border-white/10 bg-[#0f1624]"
+            className="h-11 border-input bg-background dark:border-white/10 dark:bg-[#0f1624]"
           />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="settings-email">Email</Label>
-          <Input id="settings-email" value={email} disabled className="h-11 border-white/10 bg-[#0f1624] opacity-80" />
+          <Input
+            id="settings-email"
+            value={email}
+            disabled
+            className="h-11 border-input bg-background opacity-80 dark:border-white/10 dark:bg-[#0f1624]"
+          />
         </div>
 
         <Button type="submit" disabled={saving} className="h-11 rounded-xl bg-indigo-600 text-white hover:bg-indigo-500">
