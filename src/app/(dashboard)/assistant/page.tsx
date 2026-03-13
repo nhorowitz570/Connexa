@@ -1,11 +1,8 @@
 "use client"
 
-import { Maximize2, Minimize2, Sparkles } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { ChatView } from "@/components/assistant/chat-view"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 export default function AssistantPage() {
@@ -68,37 +65,7 @@ export default function AssistantPage() {
   }
 
   return (
-    <section className="flex h-[calc(100dvh-8rem)] flex-col gap-4">
-      <header className="rounded-2xl border border-border/70 bg-card/70 px-4 py-3 backdrop-blur-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <h1 className="text-2xl font-semibold tracking-tight">Assistant</h1>
-              <Badge variant="outline" className="text-[11px]">
-                Context aware
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Chat with ConnexaAI about briefs, matches, and sourcing strategy with cleaner thread-based workflows.
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => {
-              void toggleFullscreen()
-            }}
-            aria-pressed={isExpanded}
-          >
-            {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            {isExpanded ? "Exit fullscreen" : "Fullscreen"}
-          </Button>
-        </div>
-      </header>
-
+    <section className="flex h-[calc(100dvh-8rem)] flex-col">
       <div
         ref={chatShellRef}
         className={cn(
@@ -115,7 +82,12 @@ export default function AssistantPage() {
         ) : null}
 
         <div className="min-h-0 flex-1">
-          <ChatView />
+          <ChatView
+            isExpanded={isExpanded}
+            onToggleFullscreen={() => {
+              void toggleFullscreen()
+            }}
+          />
         </div>
       </div>
     </section>

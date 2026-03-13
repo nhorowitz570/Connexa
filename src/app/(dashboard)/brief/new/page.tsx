@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import {
   Zap, Settings2, ArrowRight, Calendar, DollarSign, Tag,
   FileText, Loader2,
-  Building2, Globe, MapPin, Briefcase
+  Building2, Globe, MapPin, Briefcase, Paperclip
 } from "lucide-react"
 
 import { CONFIDENCE } from "@/lib/constants"
@@ -63,6 +63,12 @@ const formatBudget = (value: number) => {
   if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`
   if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`
   return `$${value}`
+}
+
+function dateInputToday(): string {
+  const now = new Date()
+  const offset = now.getTimezoneOffset() * 60_000
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10)
 }
 
 const panelTransition = {
@@ -149,6 +155,7 @@ export default function NewBriefPage() {
   const [canceling, setCanceling] = useState(false)
   const [deepWarningOpen, setDeepWarningOpen] = useState(false)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false)
 
   // Clarification state
   const [clarificationPayload, setClarificationPayload] = useState<QuestionsPayload | null>(null)
@@ -157,6 +164,7 @@ export default function NewBriefPage() {
   const [normalizedBrief, setNormalizedBrief] = useState<NormalizedBrief | null>(null)
   const [weights, setWeights] = useState<Record<string, number> | null>(null)
   const draftCreationRef = useRef<Promise<string> | null>(null)
+  const todayDate = useMemo(() => dateInputToday(), [])
 
   const canSubmit = useMemo(() => {
     if (mode === "simple") return prompt.trim().length >= 10
@@ -319,6 +327,12 @@ export default function NewBriefPage() {
   const handleSubmit = async (event?: FormEvent<HTMLFormElement>) => {
     if (event) event.preventDefault()
     if (!canSubmit) return
+
+    if (mode === "detailed" && deadline && deadline < todayDate) {
+      toast.error("Target deadline cannot be in the past.")
+      return
+    }
+
     setLoading(true)
     setStep("searching")
     setRunId(null)
@@ -798,6 +812,7 @@ export default function NewBriefPage() {
                     </label>
                     <input
                       type="date"
+                      min={todayDate}
                       value={deadline}
                       onChange={(e) => setDeadline(e.target.value)}
                       className="w-full rounded-xl border border-input bg-input px-4 py-3 text-foreground transition-colors focus:border-indigo-500/50 focus:outline-none"
@@ -818,18 +833,32 @@ export default function NewBriefPage() {
                     />
                   </motion.div>
 
-                  <motion.div variants={formItemVariants} className="mt-6">
-                    <AttachmentUploader
-                      briefId={briefId}
-                      disabled={loading}
-                      onEnsureBrief={ensureDraftBriefId}
-                      onCountChange={setAttachmentCount}
-                    />
-                    {attachmentCount > 0 ? (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {attachmentCount} attachment{attachmentCount === 1 ? "" : "s"} will be included with this brief.
-                      </p>
-                    ) : null}
+                  <motion.div variants={formItemVariants} className="mt-6 rounded-xl border border-border bg-muted/40 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          <Paperclip className="mr-2 inline h-4 w-4 text-indigo-400" />
+                          Supporting Documents
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Add files to give the AI richer context before searching.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-lg"
+                        onClick={() => setAttachmentDialogOpen(true)}
+                        disabled={loading}
+                      >
+                        Upload document
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {attachmentCount > 0
+                        ? `${attachmentCount} attachment${attachmentCount === 1 ? "" : "s"} will be included with this brief.`
+                        : "No documents attached yet."}
+                    </p>
                   </motion.div>
                 </>
               )}
@@ -972,6 +1001,23 @@ export default function NewBriefPage() {
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      <Dialog open={attachmentDialogOpen} onOpenChange={setAttachmentDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Upload Documents</DialogTitle>
+            <DialogDescription>
+              Attach PDFs, docs, spreadsheets, or images to include in this brief.
+            </DialogDescription>
+          </DialogHeader>
+          <AttachmentUploader
+            briefId={briefId}
+            disabled={loading}
+            onEnsureBrief={ensureDraftBriefId}
+            onCountChange={setAttachmentCount}
+          />
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={deepWarningOpen} onOpenChange={setDeepWarningOpen}>
         <DialogContent>

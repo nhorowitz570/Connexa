@@ -1,6 +1,6 @@
 "use client"
 
-import { Menu } from "lucide-react"
+import { Maximize2, Menu, Minimize2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -23,6 +23,11 @@ type ThreadsResponse = {
 
 const NEW_CHAT_COOLDOWN_MS = 5000
 
+type ChatViewProps = {
+  isExpanded?: boolean
+  onToggleFullscreen?: () => void
+}
+
 function normalizeMessage(input: Record<string, unknown>): ChatMessageType {
   return {
     id: typeof input.id === "string" ? input.id : crypto.randomUUID(),
@@ -41,7 +46,7 @@ function isNearBottom(element: HTMLDivElement): boolean {
   return remaining < 100
 }
 
-export function ChatView() {
+export function ChatView({ isExpanded = false, onToggleFullscreen }: ChatViewProps) {
   const [threads, setThreads] = useState<ChatThread[]>([])
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessageType[]>([])
@@ -355,7 +360,22 @@ export function ChatView() {
               <p className="text-xs text-muted-foreground">Ask questions about briefs, matches, and strategy</p>
             </div>
           </div>
-          <ExportThreadDropdown thread={activeThread} messages={messages} />
+          <div className="flex items-center gap-2">
+            {onToggleFullscreen ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-11 w-11 rounded-xl border-border bg-background/80 dark:border-white/15 dark:bg-white/5"
+                onClick={onToggleFullscreen}
+                aria-label={isExpanded ? "Exit fullscreen" : "Enter fullscreen"}
+                aria-pressed={isExpanded}
+              >
+                {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </Button>
+            ) : null}
+            <ExportThreadDropdown thread={activeThread} messages={messages} />
+          </div>
         </div>
 
         <div

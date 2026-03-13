@@ -374,7 +374,7 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
             </form>
 
             {searchOpen ? (
-              <div className="absolute left-0 right-0 top-[calc(100%+8px)] rounded-xl border border-border bg-popover/95 p-2 shadow-2xl backdrop-blur-2xl">
+              <div className="absolute left-0 right-0 top-[calc(100%+8px)] origin-top animate-in fade-in-0 slide-in-from-top-2 rounded-xl border border-border bg-popover/95 p-2 shadow-2xl duration-200 backdrop-blur-2xl">
                 {trimmedSearchTerm.length > 0 ? (
                   <p className="px-2 py-1 text-xs text-muted-foreground">Results for &quot;{trimmedSearchTerm}&quot;</p>
                 ) : (
@@ -382,14 +382,14 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
                 )}
 
                 <div className="max-h-[22rem] space-y-2 overflow-y-auto pr-1">
-                  <div>
+                  <div className="animate-in fade-in-0 slide-in-from-top-1 duration-200">
                     <p className="px-2 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Pages</p>
                     {filteredPages.map((item) => (
                       <button
                         key={item.href}
                         type="button"
                         onClick={() => goTo(item.href)}
-                        className="flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/8"
+                        className="animate-in fade-in-0 slide-in-from-top-1 flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors duration-200 hover:bg-white/8"
                       >
                         <LayoutGrid className="mt-0.5 h-4 w-4 text-indigo-300" />
                         <span className="min-w-0">
@@ -400,14 +400,14 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
                     ))}
                   </div>
 
-                  <div>
+                  <div className="animate-in fade-in-0 slide-in-from-top-1 duration-200">
                     <p className="px-2 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Settings</p>
                     {filteredSettings.map((item) => (
                       <button
                         key={item.href}
                         type="button"
                         onClick={() => goTo(item.href)}
-                        className="flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/8"
+                        className="animate-in fade-in-0 slide-in-from-top-1 flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors duration-200 hover:bg-white/8"
                       >
                         <SlidersHorizontal className="mt-0.5 h-4 w-4 text-indigo-300" />
                         <span className="min-w-0">
@@ -418,7 +418,7 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
                     ))}
                   </div>
 
-                  <div>
+                  <div className="animate-in fade-in-0 slide-in-from-top-1 duration-200">
                     <p className="px-2 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Briefs</p>
                     {isSearching ? (
                       <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
@@ -431,7 +431,7 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
                           key={brief.id}
                           type="button"
                           onClick={() => goTo(`/brief/${brief.id}`)}
-                          className="flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/8"
+                          className="animate-in fade-in-0 slide-in-from-top-1 flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors duration-200 hover:bg-white/8"
                         >
                           <FileText className="mt-0.5 h-4 w-4 text-indigo-300" />
                           <span className="min-w-0">
@@ -459,7 +459,7 @@ export function Header({ email, fullName, onOpenMobileNav }: HeaderProps) {
                         goTo(`/history?${params.toString()}`)
                       }}
                       className={cn(
-                        "w-full rounded-lg border border-border px-2 py-2 text-left text-xs text-muted-foreground",
+                        "animate-in fade-in-0 slide-in-from-top-1 w-full rounded-lg border border-border px-2 py-2 text-left text-xs text-muted-foreground duration-200",
                         "transition-colors hover:border-indigo-400/30 hover:bg-indigo-500/10 hover:text-foreground dark:hover:text-white",
                       )}
                     >

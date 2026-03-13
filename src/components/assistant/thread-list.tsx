@@ -39,7 +39,7 @@ export function ThreadList({
 
   return (
     <>
-      <aside className="glass-card flex h-full flex-col rounded-2xl border border-border bg-card/75 dark:border-white/10 dark:bg-[#111928]/70">
+      <aside className="glass-card flex h-full flex-col rounded-none border border-border bg-card/75 dark:border-white/10 dark:bg-[#111928]/70">
         <div className="border-b border-border p-3 dark:border-white/10">
           <Button
             className="h-11 w-full rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground dark:disabled:bg-[#3b3f46] dark:disabled:text-[#a3a3a3]"
